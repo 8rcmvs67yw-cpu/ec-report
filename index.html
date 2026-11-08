@@ -403,9 +403,12 @@
             <button class="btn-secondary" onclick="previewReport()">👁️ Xem trước báo cáo</button>
             <div style="flex-grow: 1;"></div>
             
-            <!-- THÊM 2 NÚT LƯU BÁO CÁO -->
-            <button class="btn-primary" onclick="saveToCloud('grab')" style="background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%); border-color: #1E40AF;">☁️ Lưu GrabMart</button>
-            <button class="btn-primary" onclick="saveToCloud('shopee')" style="background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%); border-color: #1E40AF;">☁️ Lưu ShopeeFood</button>
+            <!-- THÊM 2 NÚT LƯU BÁO CÁO (Tắt cờ Auto-save khi click tay) -->
+            <button class="btn-primary" onclick="saveToCloud('grab', false)" style="background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%); border-color: #1E40AF;">☁️ Lưu GrabMart</button>
+            <button class="btn-primary" onclick="saveToCloud('shopee', false)" style="background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%); border-color: #1E40AF;">☁️ Lưu ShopeeFood</button>
+            
+            <!-- THÊM LABEL TRẠNG THÁI LƯU TỰ ĐỘNG -->
+            <span id="autoSaveStatus" style="font-size: 13px; color: var(--color-mid); font-weight: 600; display: flex; align-items: center; min-width: 135px;"></span>
             
             <button class="btn-grab" onclick="printReport('grab')">🖨️ In GrabMart</button>
             <button class="btn-shopee" onclick="printReport('shopee')">🖨️ In ShopeeFood</button>
@@ -640,7 +643,7 @@
                 currentGrabData = Array.from(grabMap.values()).sort(sortByPosTrd);
                 currentShopeeData = Array.from(shopeeMap.values()).sort(sortByPosTrd);
 
-                if (fileGrabInput.files.length > 0) {
+if (fileGrabInput.files.length > 0) {
                     progressBar.style.width = '75%';
                     loadingText.textContent = `Đang phân tích GrabMart: ${fileGrabInput.files[0].name}... 75%`;
                     await delayUI(200);
@@ -653,8 +656,12 @@
                         if (grabCursor >= 0) {
                             const gRow = validGrabRows[grabCursor];
                             currentGrabData[i].orderId = String(gRow['Orrder ID'] || gRow['Order ID'] || '').trim();
+                            
+                            // YÊU CẦU: Giá trị GrabMart ghi nhận = Lọc phần số và trừ đi 500
                             let rawGrabVal = String(gRow['Giá trị Grabmart ghi nhận'] || '0');
-                            currentGrabData[i].valPlatform = Number(rawGrabVal.replace(/[^\d]/g, '')) || 0;
+                            let numericGrabVal = Number(rawGrabVal.replace(/[^\d]/g, '')) || 0;
+                            currentGrabData[i].valPlatform = Math.max(0, numericGrabVal - 500);
+                            
                             grabCursor--; 
                         }
                     }
@@ -666,6 +673,10 @@
                 
                 loadingOverlay.classList.remove('show');
                 previewReport();
+                
+                // KÍCH HOẠT LƯU TỰ ĐỘNG LÊN GOOGLE SHEETS SAU KHI MAP FILE XONG
+                triggerAutoSave('grab');
+                triggerAutoSave('shopee');
                 
                 await delayUI(150);
                 const displayTarget = targetDate.split('-').reverse().join('.');
@@ -689,6 +700,24 @@
             }
         }
 
+       // Biến lưu trữ Timer để thực hiện kỹ thuật Debounce (Chống gọi API liên tục làm kẹt server)
+        let autoSaveTimerGrab = null;
+        let autoSaveTimerShopee = null;
+
+        // Hàm kích hoạt lưu tự động ngầm (Chờ 2 giây sau khi người dùng ngừng gõ phím)
+        function triggerAutoSave(reportType) {
+            const statusEl = document.getElementById('autoSaveStatus');
+            if (statusEl) statusEl.textContent = 'Đang chờ lưu...';
+            
+            if (reportType === 'grab') {
+                clearTimeout(autoSaveTimerGrab);
+                autoSaveTimerGrab = setTimeout(() => saveToCloud('grab', true), 2000);
+            } else {
+                clearTimeout(autoSaveTimerShopee);
+                autoSaveTimerShopee = setTimeout(() => saveToCloud('shopee', true), 2000);
+            }
+        }
+
         // --- CÁC HÀM XỬ LÝ SỰ KIỆN TRÊN Ô NHẬP LIỆU (EXCEL-LIKE) ---
         
         // 1. Cập nhật dữ liệu vào biến lưu trữ chung
@@ -701,6 +730,9 @@
                 let num = Number(String(value).replace(/[^\d]/g, '')) || 0;
                 dataArr[index][field] = num;
             }
+            
+            // Kích hoạt lưu tự động ngay khi dữ liệu ô bị thay đổi (Bao gồm cả copy/paste)
+            triggerAutoSave(reportType);
         }
 
         // 2. Bắt sự kiện Copy/Paste nhiều dòng
@@ -915,12 +947,14 @@
             }, 150);
         }
 
-        // HÀM MỚI: Đóng gói dữ liệu và gửi lên Google Apps Script
-        function saveToCloud(reportType) {
+// HÀM MỚI: Đóng gói dữ liệu và gửi lên Google Apps Script (Đã bọc logic ngầm Auto-save)
+        function saveToCloud(reportType, isAutoSave = false) {
             const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
+            const statusEl = document.getElementById('autoSaveStatus');
             
             if (!dataArr || dataArr.length === 0 || dataArr === demoDataGrab || dataArr === demoDataShopee) {
-                showCustomAlert('Vui lòng upload và xử lý file GMD thật trước khi lưu (Không lưu dữ liệu Demo).');
+                if (!isAutoSave) showCustomAlert('Vui lòng upload và xử lý file GMD thật trước khi lưu (Không lưu dữ liệu Demo).');
+                if (statusEl && isAutoSave) statusEl.textContent = '';
                 return;
             }
 
@@ -928,9 +962,15 @@
             const loadingText = document.getElementById('loadingText');
             const progressBar = document.getElementById('progressBar');
 
-            loadingOverlay.classList.add('show');
-            progressBar.style.width = '60%';
-            loadingText.textContent = `Đang đồng bộ dữ liệu ${reportType.toUpperCase()} lên máy chủ...`;
+            // Nếu người dùng tự bấm nút -> Hiện Loading Overlay. Nếu Auto-save -> Chỉ hiện text nhỏ góc màn hình.
+            if (!isAutoSave) {
+                loadingOverlay.classList.add('show');
+                progressBar.style.width = '60%';
+                loadingText.textContent = `Đang đồng bộ dữ liệu ${reportType.toUpperCase()} lên máy chủ...`;
+            } else if (statusEl) {
+                statusEl.textContent = `🔄 Đang lưu ${reportType}...`;
+                statusEl.style.color = 'var(--color-mid)';
+            }
 
             // Đóng gói thông tin người lập và ngày đối soát từ Header
             const payload = {
@@ -944,25 +984,45 @@
             if (typeof google !== 'undefined' && google.script && google.script.run) {
                 google.script.run
                     .withSuccessHandler(function(response) {
-                        progressBar.style.width = '100%';
-                        loadingText.textContent = 'Đồng bộ hoàn tất!';
-                        setTimeout(() => {
-                            loadingOverlay.classList.remove('show');
+                        if (!isAutoSave) {
+                            progressBar.style.width = '100%';
+                            loadingText.textContent = 'Đồng bộ hoàn tất!';
+                            setTimeout(() => {
+                                loadingOverlay.classList.remove('show');
+                                if (response.success) {
+                                    showCustomAlert('✅ ' + response.message);
+                                } else {
+                                    showCustomAlert('❌ Lỗi lưu trữ: ' + response.message);
+                                }
+                            }, 500);
+                        } else if (statusEl) {
                             if (response.success) {
-                                showCustomAlert('✅ ' + response.message);
+                                statusEl.textContent = '✅ Đã lưu tự động';
+                                statusEl.style.color = '#00B14F';
+                                setTimeout(() => { statusEl.textContent = ''; }, 3000);
                             } else {
-                                showCustomAlert('❌ Lỗi lưu trữ: ' + response.message);
+                                statusEl.textContent = '❌ Lỗi lưu tự động';
+                                statusEl.style.color = '#EE4D2D';
                             }
-                        }, 500);
+                        }
                     })
                     .withFailureHandler(function(error) {
-                        loadingOverlay.classList.remove('show');
-                        showCustomAlert('❌ Lỗi kết nối máy chủ: ' + error.message);
+                        if (!isAutoSave) {
+                            loadingOverlay.classList.remove('show');
+                            showCustomAlert('❌ Lỗi kết nối máy chủ: ' + error.message);
+                        } else if (statusEl) {
+                            statusEl.textContent = '❌ Mất kết nối';
+                            statusEl.style.color = '#EE4D2D';
+                        }
                     })
                     .saveReportToSheet(payload);
             } else {
-                loadingOverlay.classList.remove('show');
-                showCustomAlert('❌ Môi trường thử nghiệm không hỗ trợ lưu. Vui lòng chạy ứng dụng trực tiếp trên Google Apps Script (Web App).');
+                if (!isAutoSave) {
+                    loadingOverlay.classList.remove('show');
+                    showCustomAlert('❌ Môi trường thử nghiệm không hỗ trợ lưu. Vui lòng chạy ứng dụng trực tiếp trên Google Apps Script (Web App).');
+                } else if (statusEl) {
+                    statusEl.textContent = '⚠️ Môi trường Test (Không lưu)';
+                }
             }
         }
     </script>
