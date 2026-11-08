@@ -264,6 +264,24 @@
             height: 22px;
             text-align: center;
         }
+        
+        /* APPLE UI: Ô CÓ THỂ CHỈNH SỬA TRỰC TIẾP */
+        .cell-editable {
+            cursor: text;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        .cell-editable:hover {
+            background-color: rgba(45, 153, 174, 0.08);
+            box-shadow: inset 0 0 0 1px var(--color-light);
+        }
+        .cell-editable:focus {
+            outline: none;
+            background-color: #FFFFFF;
+            box-shadow: inset 0 0 0 2px var(--color-mid);
+            border-radius: 2px;
+        }
+
         /* Dòng TỔNG cuối bảng */
         table.accounting-table tr.total-row td {
             background-color: #CCCCCC;
@@ -676,7 +694,23 @@
             }, 300); // Delay ban đầu để show mượt bước 1
         }
 
-function generateReportHTML(title, data, reportType, channelLabel, channelHeaderLabel) {
+// HÀM MỚI: Cập nhật mảng dữ liệu khi chỉnh sửa trực tiếp trên bảng
+        function updateCellData(reportType, index, field, element) {
+            const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
+            let rawValue = element.innerText.trim();
+            
+            if (field === 'orderId') {
+                dataArr[index][field] = rawValue;
+            } else if (field === 'valPlatform' || field === 'valPack') {
+                // Lọc lấy đúng phần số (Ví dụ: người dùng nhập "444.990" -> 444990)
+                let num = Number(rawValue.replace(/[^\d]/g, '')) || 0;
+                dataArr[index][field] = num;
+            }
+            // Render lại bảng để tự động tính tổng và độ lệch
+            previewReport();
+        }
+
+        function generateReportHTML(title, data, reportType, channelLabel, channelHeaderLabel) {
             // Lấy thông tin ngày và người lập từ form
             const reportDateInput = document.getElementById('reportDate').value;
             const reportCreator = document.getElementById('reportCreator').value.trim().toUpperCase() || 'HẢI ÂU';
@@ -701,16 +735,16 @@ function generateReportHTML(title, data, reportType, channelLabel, channelHeader
                     <tr>
                         <td>${index + 1}</td>
                         <td>${item.date}</td>
-                        <td>${item.orderId}</td>
+                        <td class="cell-editable" contenteditable="true" onblur="updateCellData('${reportType}', ${index}, 'orderId', this)">${item.orderId}</td>
                         <td>${item.admin}</td>
                         <td>${item.picker}</td>
                         <td>${item.group}</td>
                         <td>${item.pos}</td>
                         <td>${item.trd}</td>
                         <td>${formatVND(item.valPos)}</td>
-                        <td>${formatVND(item.valPlatform)}</td>
-                        <td>${formatVND(item.valPack)}</td>
-                        <td>${formatVND(diff)}</td>
+                        <td class="cell-editable" contenteditable="true" onblur="updateCellData('${reportType}', ${index}, 'valPlatform', this)" style="color: var(--color-mid); font-weight: 600;">${formatVND(item.valPlatform)}</td>
+                        <td class="cell-editable" contenteditable="true" onblur="updateCellData('${reportType}', ${index}, 'valPack', this)">${formatVND(item.valPack)}</td>
+                        <td style="font-weight: 600; color: ${diff !== 0 ? '#E60012' : 'inherit'};">${formatVND(diff)}</td>
                     </tr>
                 `;
             });
