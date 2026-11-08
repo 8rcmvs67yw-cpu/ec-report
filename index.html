@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EC DAILY RECONCILIATION - LOTTE MART</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* CSS VARIABLES - THEME (APPLE STYLE & NEW BRAND COLORS) */
+        :root {
+            --color-dark: #001C44;
+            --color-mid: #0C5776;
+            --color-light: #2D99AE;
+            --bg-body: #F5F5F7;
+            --bg-surface: #FFFFFF;
+            --gray-border: #D2D2D7;
+            --gray-text: #86868B;
+            --black-text: #1D1D1F;
+        }
+
+        /* RESET & BASE */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; 
+            background-color: var(--bg-body); 
+            color: var(--black-text); 
+            font-size: 14px; 
+            line-height: 1.4; 
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* MANAGEMENT UI */
+        .app-container { 
+            max-width: 1200px; 
+            margin: 40px auto; 
+            background: var(--bg-surface); 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+            overflow: hidden; 
+            border: 1px solid rgba(255,255,255,0.8); 
+        }
+        .header { 
+            background: linear-gradient(135deg, var(--color-dark), var(--color-mid)); 
+            color: var(--bg-surface); 
+            padding: 24px 32px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        .header h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.3px; }
+        
+        .date-picker-wrap { display: flex; align-items: center; gap: 12px; font-weight: 500; }
+        .date-picker-wrap input { 
+            padding: 8px 14px; 
+            border: 1px solid rgba(255,255,255,0.3); 
+            border-radius: 8px; 
+            font-family: inherit; 
+            background: rgba(255,255,255,0.15); 
+            color: #FFF; 
+            outline: none; 
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .date-picker-wrap input:focus { 
+            border-color: var(--color-light); 
+            background: rgba(255,255,255,0.25); 
+        }
+        .date-picker-wrap input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+        
+        .upload-section { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 24px; 
+            padding: 32px; 
+            border-bottom: 1px solid var(--gray-border); 
+            background-color: var(--bg-surface);
+        }
+        .upload-box { 
+            border: 2px dashed #C7C7CC; 
+            border-radius: 12px; 
+            padding: 24px; 
+            text-align: center; 
+            background-color: #FAFAFC; 
+            transition: all 0.25s ease; 
+        }
+        .upload-box:hover { 
+            border-color: var(--color-light); 
+            background-color: rgba(45, 153, 174, 0.04); 
+            transform: translateY(-2px);
+        }
+        .upload-box label { 
+            display: block; 
+            font-weight: 600; 
+            margin-bottom: 10px; 
+            color: var(--color-mid); 
+            cursor: pointer; 
+            font-size: 15px;
+        }
+        .upload-box input[type="file"] { display: none; }
+        .file-name { font-size: 12px; color: var(--gray-text); margin-top: 8px; word-break: break-all; }
+
+        .action-section { 
+            padding: 24px 32px; 
+            display: flex; 
+            gap: 16px; 
+            background-color: #FAFAFC; 
+        }
+        
+        /* TACTILE PHYSICAL BUTTONS (APPLE / NEUMORPHISM HYBRID) */
+        button { 
+            position: relative;
+            padding: 10px 24px; 
+            border: none; 
+            border-radius: 10px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            font-family: inherit; 
+            font-size: 14px; 
+            letter-spacing: 0.3px;
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            outline: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .btn-primary { 
+            background: linear-gradient(180deg, #106f97 0%, var(--color-mid) 100%);
+            color: #FFF; 
+            text-shadow: 0 -1px 0 rgba(0,0,0,0.2);
+            box-shadow: 
+                0 4px 6px rgba(12, 87, 118, 0.25), 
+                0 1px 0 rgba(255, 255, 255, 0.25) inset, 
+                0 -2px 0 rgba(0, 0, 0, 0.15) inset; 
+            border: 1px solid #09425a;
+        }
+        .btn-primary:active {
+            box-shadow: 
+                0 1px 2px rgba(12, 87, 118, 0.3), 
+                0 2px 3px rgba(0, 0, 0, 0.2) inset;
+            transform: translateY(2px);
+        }
+
+        .btn-secondary { 
+            background: linear-gradient(180deg, #FFFFFF 0%, #F5F5F7 100%);
+            color: var(--color-dark); 
+            border: 1px solid #C7C7CC;
+            box-shadow: 
+                0 2px 4px rgba(0, 0, 0, 0.05),
+                0 1px 0 #FFFFFF inset,
+                0 -2px 0 rgba(0, 0, 0, 0.05) inset;
+        }
+        .btn-secondary:active {
+            box-shadow: 
+                0 1px 2px rgba(0, 0, 0, 0.05), 
+                0 2px 3px rgba(0, 0, 0, 0.08) inset;
+            transform: translateY(2px);
+        }
+
+        .btn-print { 
+            background: linear-gradient(180deg, #4b5563 0%, #374151 100%);
+            color: #FFF; 
+            text-shadow: 0 -1px 0 rgba(0,0,0,0.2);
+            box-shadow: 
+                0 4px 6px rgba(55, 65, 81, 0.25),
+                0 1px 0 rgba(255, 255, 255, 0.25) inset,
+                0 -2px 0 rgba(0, 0, 0, 0.2) inset;
+            border: 1px solid #1f2937;
+        }
+        .btn-print:active {
+            box-shadow: 
+                0 1px 2px rgba(55, 65, 81, 0.3), 
+                0 2px 3px rgba(0, 0, 0, 0.3) inset;
+            transform: translateY(2px);
+        }
+
+        /* PREVIEW AREA */
+        .preview-area { display: none; padding: 40px; background: var(--bg-body); }
+        .paper-page { 
+            background: var(--bg-surface); 
+            margin: 0 auto 40px; 
+            padding: 30px 40px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06); 
+            border-radius: 4px;
+            max-width: 1122px; 
+            width: 100%; 
+        }
+        /* --- REPORT LAYOUT (100% MATCH TO EXCEL SAMPLE) --- */
+        table.accounting-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            color: #000;
+        }
+        table.accounting-table th, 
+        table.accounting-table td {
+            border: 1px solid #000;
+            padding: 3px 5px;
+            vertical-align: middle;
+        }
+        /* Ô tiêu đề bên trái (Cột 1 -> 8) không có viền ngoài */
+        table.accounting-table td.report-title-cell {
+            border-top: none;
+            border-left: none;
+            border-right: 1px solid #000;
+            border-bottom: 1px solid #000;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: left;
+            padding-left: 15px;
+            vertical-align: middle;
+        }
+        /* Khung thông tin góc phải gắn liền cột 9 -> 12 */
+        table.accounting-table td.meta-label {
+            text-align: left;
+            font-weight: 400;
+            padding: 2px 6px;
+            height: 21px;
+        }
+        table.accounting-table td.meta-value {
+            text-align: center;
+            font-weight: 400;
+            padding: 2px 6px;
+            height: 21px;
+        }
+        /* Dòng tiêu đề 12 cột nền xám */
+        table.accounting-table tr.col-header-row th {
+            background-color: #CCCCCC;
+            font-weight: 600;
+            text-align: center;
+            height: 62px;
+            line-height: 1.25;
+            padding: 4px 3px;
+        }
+        /* Dữ liệu trong bảng */
+        table.accounting-table tbody td {
+            height: 22px;
+            text-align: center;
+        }
+        /* Dòng TỔNG cuối bảng */
+        table.accounting-table tr.total-row td {
+            background-color: #CCCCCC;
+            font-weight: 700;
+            font-size: 13px;
+            height: 26px;
+        }
+        table.accounting-table tr.total-row td.num-total {
+            text-align: right;
+            padding-right: 6px;
+        }
+
+/* --- PRINT MEDIA QUERIES --- */
+        @media print {
+            @page { size: A4 landscape; margin: 8mm 10mm; }
+            body { background: none; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .app-container, .preview-area { display: none !important; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            .paper-page { margin: 0; padding: 0; box-shadow: none; max-width: none; width: 100%; page-break-after: always; }
+            .paper-page:last-child { page-break-after: auto; }
+            table.accounting-table { page-break-inside: auto; }
+            table.accounting-table tr { page-break-inside: avoid; page-break-after: auto; }
+            table.accounting-table thead { display: table-header-group; }
+        }
+
+        /* PROGRESS OVERLAY (APPLE STYLE) */
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(245, 245, 247, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: none; justify-content: center; align-items: center; z-index: 9999;
+            opacity: 0; transition: opacity 0.3s ease;
+        }
+        .loading-overlay.show { opacity: 1; display: flex; }
+        .loading-modal {
+            background: var(--bg-surface); padding: 32px 40px; border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1); width: 340px; text-align: center;
+            border: 1px solid rgba(255,255,255,0.8);
+        }
+.loading-text { font-size: 15px; font-weight: 600; color: var(--color-dark); margin-bottom: 16px; letter-spacing: 0.3px; }
+        .progress-bar-bg { background: #E5E5EA; height: 8px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
+        .progress-bar-fill { background: linear-gradient(90deg, var(--color-mid), var(--color-light)); height: 100%; width: 0%; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* CUSTOM ALERT MODAL (APPLE STYLE) */
+        .alert-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            display: none; justify-content: center; align-items: center; z-index: 10000;
+            opacity: 0; transition: opacity 0.2s ease;
+        }
+        .alert-overlay.show { opacity: 1; display: flex; }
+        .alert-modal {
+            background: rgba(255, 255, 255, 0.95);
+            width: 320px;
+            border-radius: 14px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+            overflow: hidden;
+            transform: scale(0.95);
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        .alert-overlay.show .alert-modal { transform: scale(1); }
+        .alert-content {
+            padding: 24px 20px;
+            font-size: 14px;
+            color: #1D1D1F;
+            line-height: 1.5;
+            white-space: pre-wrap; /* Giữ nguyên định dạng xuống dòng của text */
+            font-weight: 500;
+        }
+        .alert-btn-wrap { border-top: 1px solid #E5E5EA; }
+        .alert-btn {
+            width: 100%; padding: 14px; background: transparent; border: none;
+            color: #007AFF; /* Apple Blue */
+            font-size: 17px; font-weight: 600; cursor: pointer;
+            transition: background 0.1s; letter-spacing: -0.4px; outline: none;
+        }
+        .alert-btn:active { background: #E5E5EA; }
+    </style>
+</head>
+<body>
+    <!-- Giữ nguyên html app-container và preview-area... -->
+    <div class="app-container no-print">
+        <!-- Khối header và upload giữ nguyên -->
+        <div class="header">
+            <h1>LOTTE MART - EC DAILY RECONCILIATION</h1>
+            <div class="date-picker-wrap">
+                <label for="reportCreator">Người lập:</label>
+                <input type="text" id="reportCreator" value="HẢI ÂU" placeholder="Nhập tên người lập" style="width: 150px;">
+                <label for="reportDate">Ngày đối soát:</label>
+                <input type="date" id="reportDate" value="2026-10-18">
+            </div>
+        </div>
+        <div class="upload-section">
+            <div class="upload-box">
+                <label for="fileGmd">📁 TẢI FILE GMD (POS)</label>
+                <input type="file" id="fileGmd" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileGmd', 'nameGmd')">
+                <div class="file-name" id="nameGmd">Chưa chọn file</div>
+            </div>
+            <div class="upload-box">
+                <label for="fileGrab">📁 TẢI FILE GRABMART</label>
+                <input type="file" id="fileGrab" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileGrab', 'nameGrab')">
+                <div class="file-name" id="nameGrab">Chưa chọn file</div>
+            </div>
+            <div class="upload-box">
+                <label for="fileShopee">📁 TẢI FILE SHOPEEFOOD</label>
+                <input type="file" id="fileShopee" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileShopee', 'nameShopee')">
+                <div class="file-name" id="nameShopee">Chưa chọn file</div>
+            </div>
+        </div>
+        <div class="action-section">
+            <button class="btn-primary" onclick="processData()">⚙️ Xử lý dữ liệu</button>
+            <button class="btn-secondary" onclick="previewReport()">👁️ Xem trước báo cáo</button>
+            <div style="flex-grow: 1;"></div>
+            <button class="btn-print" onclick="printReport('grab')">🖨️ In GrabMart</button>
+            <button class="btn-print" onclick="printReport('shopee')">🖨️ In ShopeeFood</button>
+        </div>
+    </div>
+
+    <div class="preview-area no-print" id="previewArea">
+        <p style="text-align: center; color: #666; margin-bottom: 15px;">Chế độ xem trước (Giao diện in thực tế A4 ngang)</p>
+        <div id="previewContent"></div>
+    </div>
+
+    <div id="printArea" class="print-only" style="display: none;"></div>
+
+   <!-- KHỐI GIAO DIỆN PROGRESS BAR MỚI -->
+    <div id="loadingOverlay" class="loading-overlay no-print">
+        <div class="loading-modal">
+            <div class="loading-text" id="loadingText">Chuẩn bị dữ liệu... 0%</div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHỐI GIAO DIỆN CUSTOM ALERT -->
+    <div id="customAlertOverlay" class="alert-overlay no-print">
+        <div class="alert-modal">
+            <div class="alert-content" id="customAlertText"></div>
+            <div class="alert-btn-wrap">
+                <button class="alert-btn" onclick="closeCustomAlert()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+       // HÀM ĐIỀU KHIỂN CUSTOM ALERT
+        function showCustomAlert(message) {
+            document.getElementById('customAlertText').textContent = message;
+            document.getElementById('customAlertOverlay').classList.add('show');
+        }
+
+        function closeCustomAlert() {
+            document.getElementById('customAlertOverlay').classList.remove('show');
+        }
+
+        function updateFileName(inputId, nameId) {
+            const input = document.getElementById(inputId);
+            const nameDisplay = document.getElementById(nameId);
+            if (input.files.length > 0) {
+                nameDisplay.textContent = input.files[0].name;
+                nameDisplay.style.color = 'var(--color-mid)';
+                nameDisplay.style.fontWeight = '600';
+            } else {
+                nameDisplay.textContent = 'Chưa chọn file';
+                nameDisplay.style.color = 'var(--gray-text)';
+                nameDisplay.style.fontWeight = 'normal';
+            }
+        }
+
+        const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num);
+
+        // Dữ liệu 15 dòng khớp chính xác 100% với mẫu kế toán GrabMart
+        const demoDataGrab = [
+            { date: '28.10.2026', orderId: 'GM-672',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0003', valPos: 446700, valPlatform: 444990, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-982',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0004', valPos: 636300, valPlatform: 637200, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-615',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0005', valPos: 46600,  valPlatform: 46100,  valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-532',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0006', valPos: 386700, valPlatform: 386200, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-881',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0007', valPos: 47500,  valPlatform: 47000,  valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-279',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0008', valPos: 729100, valPlatform: 728930, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-551',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0010', valPos: 214400, valPlatform: 213900, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-135F', admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0011', valPos: 374100, valPlatform: 379080, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-217',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0012', valPos: 79900,  valPlatform: 79400,  valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-498F', admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0013', valPos: 60400,  valPlatform: 59900,  valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-887',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0014', valPos: 327000, valPlatform: 326500, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-345',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0015', valPos: 123700, valPlatform: 122150, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-276',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0017', valPos: 64900,  valPlatform: 64650,  valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-029',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0019', valPos: 575700, valPlatform: 577950, valPack: 500 },
+            { date: '28.10.2026', orderId: 'GM-474',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0020', valPos: 133800, valPlatform: 133300, valPack: 500 }
+        ];
+
+        const demoDataShopee = [
+            { date: '28.10.2026', orderId: 'SPF-135', admin: 'Ngọc Minh', picker: 'HẢI ÂU', group: 'EC', pos: '1082', trd: '0006', valPos: 120000, valPlatform: 119500, valPack: 500 },
+            { date: '28.10.2026', orderId: 'SPF-217', admin: 'Ngọc Minh', picker: 'HẢI ÂU', group: 'EC', pos: '1082', trd: '0007', valPos: 850000, valPlatform: 849500, valPack: 500 }
+        ];
+
+        let currentGrabData = demoDataGrab;
+        let currentShopeeData = demoDataShopee;
+
+        function normalizeDateISO(val) {
+            if (!val) return '';
+            if (val instanceof Date && !isNaN(val)) {
+                const y = val.getFullYear();
+                const m = String(val.getMonth() + 1).padStart(2, '0');
+                const d = String(val.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+            if (typeof val === 'number') {
+                const utcDays = Math.floor(val - 25569);
+                const dateObj = new Date(utcDays * 86400 * 1000);
+                const y = dateObj.getUTCFullYear();
+                const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+                const d = String(dateObj.getUTCDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+            const str = String(val).trim();
+            const m1 = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+            if (m1) {
+                return `${m1[1]}-${m1[2].padStart(2, '0')}-${m1[3].padStart(2, '0')}`;
+            }
+            const m2 = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+            if (m2) {
+                return `${m2[3]}-${m2[2].padStart(2, '0')}-${m2[1].padStart(2, '0')}`;
+            }
+            return '';
+        }
+
+        function processData() {
+            const fileInput = document.getElementById('fileGmd');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                currentGrabData = demoDataGrab;
+                currentShopeeData = demoDataShopee;
+                previewReport();
+                showCustomAlert('Chưa chọn file GMD. Hệ thống đang hiển thị dữ liệu Demo.');
+                return;
+            }
+
+            if (typeof XLSX === 'undefined') {
+                showCustomAlert('Không tải được thư viện đọc Excel (SheetJS). Vui lòng kiểm tra kết nối mạng.');
+                return;
+            }
+
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const progressBar = document.getElementById('progressBar');
+            const loadingText = document.getElementById('loadingText');
+            
+            const file = fileInput.files[0];
+
+            // BƯỚC 1: Xác nhận file
+            loadingOverlay.classList.add('show');
+            progressBar.style.width = '10%';
+            loadingText.textContent = `Đã nhận dữ liệu: ${file.name}... 10%`;
+
+            // Dùng setTimeout để UI kịp vẽ BƯỚC 1 trước khi chạy BƯỚC 2
+            setTimeout(() => {
+                // BƯỚC 2: Bắt đầu đọc file
+                progressBar.style.width = '30%';
+                loadingText.textContent = 'Đang mở file và đọc luồng dữ liệu... 30%';
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    
+                    // BƯỚC 3: Giải mã file Excel
+                    progressBar.style.width = '60%';
+                    loadingText.textContent = 'Đang phân giải định dạng Excel... 60%';
+
+                    setTimeout(() => {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                            
+                            // BƯỚC 4: Lọc và trích xuất dữ liệu
+                            progressBar.style.width = '85%';
+                            loadingText.textContent = 'Đang trích xuất và đối soát số liệu... 85%';
+
+                            setTimeout(() => {
+                                const firstSheetName = workbook.SheetNames[0];
+                                const worksheet = workbook.Sheets[firstSheetName];
+                                const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                                if (!rows || rows.length === 0) {
+                                    loadingOverlay.classList.remove('show');
+                                    showCustomAlert('File GMD trống hoặc không đúng định dạng.');
+                                    return;
+                                }
+
+                                const availableDatesSet = new Set();
+                                rows.forEach(r => {
+                                    const iso = normalizeDateISO(r['Sale Dy']);
+                                    if (iso) availableDatesSet.add(iso);
+                                });
+
+                                const availableDates = Array.from(availableDatesSet).sort();
+                                if (availableDates.length === 0) {
+                                    loadingOverlay.classList.remove('show');
+                                    showCustomAlert('Không tìm thấy cột ngày bán (Sale Dy) hợp lệ trong file GMD.');
+                                    return;
+                                }
+
+                                let targetDate = document.getElementById('reportDate').value;
+                                let autoSwitched = false;
+                                if (!availableDatesSet.has(targetDate)) {
+                                    targetDate = availableDates[availableDates.length - 1];
+                                    document.getElementById('reportDate').value = targetDate;
+                                    autoSwitched = true;
+                                }
+
+                                const grabMap = new Map();
+                                const shopeeMap = new Map();
+
+                                rows.forEach(r => {
+                                    const rowDate = normalizeDateISO(r['Sale Dy']);
+                                    if (rowDate !== targetDate) return;
+
+                                    const custType = String(r['Cust Type'] || '').trim().toUpperCase();
+                                    const posNo = String(r['Pos No'] || '').trim();
+                                    const trdNoRaw = String(r['Trd No'] || '').trim();
+                                    const trdNo = trdNoRaw.padStart(4, '0');
+                                    const saleAmt = Number(r['Sale Amt'] || 0);
+                                    const dcAmt = Number(r['D/C'] || 0);
+                                    const actualPosAmt = saleAmt - dcAmt;
+
+                                    const key = `${posNo}_${trdNo}`;
+                                    const displayDate = targetDate.split('-').reverse().join('.');
+
+                                    if (custType === 'GRABMART') {
+                                        if (!grabMap.has(key)) {
+                                            grabMap.set(key, { date: displayDate, orderId: '', admin: '', picker: '', group: 'EC', pos: posNo, trd: trdNo, valPos: 0, valPlatform: 0, valPack: 0 });
+                                        }
+                                        grabMap.get(key).valPos += actualPosAmt;
+                                    } else if (custType === 'FOODY' || custType === 'SHOPEEFOOD') {
+                                        if (!shopeeMap.has(key)) {
+                                            shopeeMap.set(key, { date: displayDate, orderId: '', admin: '', picker: '', group: 'EC', pos: posNo, trd: trdNo, valPos: 0, valPlatform: 0, valPack: 0 });
+                                        }
+                                        shopeeMap.get(key).valPos += actualPosAmt;
+                                    }
+                                });
+
+                                const sortByPosTrd = (a, b) => {
+                                    if (a.pos !== b.pos) return a.pos.localeCompare(b.pos);
+                                    return a.trd.localeCompare(b.trd);
+                                };
+
+                                currentGrabData = Array.from(grabMap.values()).sort(sortByPosTrd);
+                                currentShopeeData = Array.from(shopeeMap.values()).sort(sortByPosTrd);
+
+                                // BƯỚC 5: Hoàn tất
+                                progressBar.style.width = '100%';
+                                loadingText.textContent = 'Hoàn tất xử lý! 100%';
+
+                                setTimeout(() => {
+                                    loadingOverlay.classList.remove('show');
+                                    previewReport();
+                                    
+                                    setTimeout(() => {
+                                        const displayTarget = targetDate.split('-').reverse().join('.');
+                                        const minDateStr = availableDates[0].split('-').reverse().join('.');
+                                        const maxDateStr = availableDates[availableDates.length - 1].split('-').reverse().join('.');
+
+                                        if (autoSwitched) {
+                                            showCustomAlert(`Ngày đang chọn không có trong file GMD (${minDateStr} - ${maxDateStr}).\nHệ thống đã tự động chuyển sang ngày ${displayTarget}:\n- GrabMart: ${currentGrabData.length} đơn\n- ShopeeFood (FOODY): ${currentShopeeData.length} đơn`);
+                                        } else {
+                                            showCustomAlert(`Đã xử lý dữ liệu GMD ngày ${displayTarget}:\n- GrabMart: ${currentGrabData.length} đơn\n- ShopeeFood (FOODY): ${currentShopeeData.length} đơn`);
+                                        }
+                                    }, 150);
+
+                                }, 500); // Giữ màn hình 100% trong 0.5s để user kịp nhìn
+
+                            }, 100); 
+
+                        } catch (err) {
+                            loadingOverlay.classList.remove('show');
+                            showCustomAlert('Lỗi khi đọc file GMD: ' + err.message);
+                        }
+                    }, 100);
+                };
+
+                // Kích hoạt đọc file sau khi hiển thị Bước 2
+                reader.readAsArrayBuffer(file);
+            }, 300); // Delay ban đầu để show mượt bước 1
+        }
+
+function generateReportHTML(title, data, reportType, channelLabel, channelHeaderLabel) {
+            // Lấy thông tin ngày và người lập từ form
+            const reportDateInput = document.getElementById('reportDate').value;
+            const reportCreator = document.getElementById('reportCreator').value.trim().toUpperCase() || 'HẢI ÂU';
+            
+            // Lấy ngày từ dữ liệu nếu có, nếu không lấy từ form
+            let displayDate = reportDateInput ? reportDateInput.split('-').reverse().join('.') : '18.10.2026';
+            if (data && data.length > 0 && data[0].date) {
+                displayDate = data[0].date;
+            }
+
+            let rowsHTML = '';
+            let sumPos = 0, sumPlatform = 0, sumPack = 0, sumDiff = 0;
+
+            data.forEach((item, index) => {
+                const diff = (item.valPlatform + item.valPack) - item.valPos;
+                sumPos += item.valPos;
+                sumPlatform += item.valPlatform;
+                sumPack += item.valPack;
+                sumDiff += diff;
+
+                rowsHTML += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${item.date}</td>
+                        <td>${item.orderId}</td>
+                        <td>${item.admin}</td>
+                        <td>${item.picker}</td>
+                        <td>${item.group}</td>
+                        <td>${item.pos}</td>
+                        <td>${item.trd}</td>
+                        <td>${formatVND(item.valPos)}</td>
+                        <td>${formatVND(item.valPlatform)}</td>
+                        <td>${formatVND(item.valPack)}</td>
+                        <td>${formatVND(diff)}</td>
+                    </tr>
+                `;
+            });
+
+            return `
+                <div class="paper-page" id="report-${reportType}">
+                    <table class="accounting-table">
+                        <colgroup>
+                            <col style="width: 3.5%;">
+                            <col style="width: 8.5%;">
+                            <col style="width: 8.5%;">
+                            <col style="width: 9.5%;">
+                            <col style="width: 9.5%;">
+                            <col style="width: 4.5%;">
+                            <col style="width: 4.5%;">
+                            <col style="width: 5.5%;">
+                            <col style="width: 12.5%;">
+                            <col style="width: 11.5%;">
+                            <col style="width: 12.5%;">
+                            <col style="width: 9.5%;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <td colspan="8" rowspan="5" class="report-title-cell">${title}</td>
+                                <td class="meta-label">Ngày:</td>
+                                <td colspan="3" class="meta-value">${displayDate}</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">Tên cửa hàng:</td>
+                                <td colspan="3" class="meta-value">Đồng Nai</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">Kênh:</td>
+                                <td colspan="3" class="meta-value">${channelLabel}</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">Người lập:</td>
+                                <td colspan="3" class="meta-value">${reportCreator}</td>
+                            </tr>
+                            <tr>
+                                <td class="meta-label">Người nhận:</td>
+                                <td colspan="3" class="meta-value"></td>
+                            </tr>
+                            <tr class="col-header-row">
+                                <th>STT</th>
+                                <th>Date</th>
+                                <th>Order ID</th>
+                                <th>Admin name</th>
+                                <th>Picker name</th>
+                                <th>Group</th>
+                                <th>Pos</th>
+                                <th>Trd no</th>
+                                <th>Giá trị Pos<br>(GMD) ghi nhận</th>
+                                <th>Giá trị ${channelHeaderLabel}<br>ghi nhận</th>
+                                <th>Giá trị<br>${channelHeaderLabel}<br>ghi nhận phí<br>đóng gói</th>
+                                <th>Lệch</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHTML}
+                            <tr class="total-row">
+                                <td colspan="8">TỔNG</td>
+                                <td class="num-total">${formatVND(sumPos)}</td>
+                                <td class="num-total">${formatVND(sumPlatform)}</td>
+                                <td class="num-total">${formatVND(sumPack)}</td>
+                                <td class="num-total">${formatVND(sumDiff)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function previewReport() {
+            const htmlGrab = generateReportHTML('BÁO CÁO ĐƠN HÀNG GRABMART HÀNG NGÀY', currentGrabData, 'grab', 'Grabmart', 'GrabMart');
+            const htmlShopee = generateReportHTML('BÁO CÁO ĐƠN HÀNG SHOPEEFOOD HÀNG NGÀY', currentShopeeData, 'shopee', 'ShopeeFood', 'ShopeeFood');
+            
+            const previewArea = document.getElementById('previewArea');
+            const previewContent = document.getElementById('previewContent');
+            
+            previewContent.innerHTML = htmlGrab + htmlShopee;
+            previewArea.style.display = 'block';
+        }
+
+        function printReport(type) {
+            const printArea = document.getElementById('printArea');
+            if (type === 'grab') {
+                printArea.innerHTML = generateReportHTML('BÁO CÁO ĐƠN HÀNG GRABMART HÀNG NGÀY', currentGrabData, 'grab', 'Grabmart', 'GrabMart');
+            } else if (type === 'shopee') {
+                printArea.innerHTML = generateReportHTML('BÁO CÁO ĐƠN HÀNG SHOPEEFOOD HÀNG NGÀY', currentShopeeData, 'shopee', 'ShopeeFood', 'ShopeeFood');
+            }
+            window.focus();
+            setTimeout(() => {
+                window.print();
+            }, 150);
+        }
+    </script>
+</body>
+</html>
