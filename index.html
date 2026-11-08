@@ -402,6 +402,11 @@
             <button class="btn-primary" onclick="processData()">⚙️ Xử lý dữ liệu</button>
             <button class="btn-secondary" onclick="previewReport()">👁️ Xem trước báo cáo</button>
             <div style="flex-grow: 1;"></div>
+            
+            <!-- THÊM 2 NÚT LƯU BÁO CÁO -->
+            <button class="btn-primary" onclick="saveToCloud('grab')" style="background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%); border-color: #1E40AF;">☁️ Lưu GrabMart</button>
+            <button class="btn-primary" onclick="saveToCloud('shopee')" style="background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%); border-color: #1E40AF;">☁️ Lưu ShopeeFood</button>
+            
             <button class="btn-grab" onclick="printReport('grab')">🖨️ In GrabMart</button>
             <button class="btn-shopee" onclick="printReport('shopee')">🖨️ In ShopeeFood</button>
         </div>
@@ -450,7 +455,6 @@
             const nameDisplay = document.getElementById(nameId);
             if (input.files.length > 0) {
                 nameDisplay.textContent = input.files[0].name;
-                // Áp dụng màu thương hiệu tương ứng được truyền vào
                 nameDisplay.style.color = activeColor || 'var(--color-mid)';
                 nameDisplay.style.fontWeight = '600';
             } else {
@@ -461,23 +465,12 @@
         }
         const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num);
 
-        // Dữ liệu 15 dòng khớp chính xác 100% với mẫu kế toán GrabMart
         const demoDataGrab = [
             { date: '28.10.2026', orderId: 'GM-672',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0003', valPos: 446700, valPlatform: 444990, valPack: 500 },
             { date: '28.10.2026', orderId: 'GM-982',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0004', valPos: 636300, valPlatform: 637200, valPack: 500 },
             { date: '28.10.2026', orderId: 'GM-615',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0005', valPos: 46600,  valPlatform: 46100,  valPack: 500 },
             { date: '28.10.2026', orderId: 'GM-532',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0006', valPos: 386700, valPlatform: 386200, valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-881',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0007', valPos: 47500,  valPlatform: 47000,  valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-279',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0008', valPos: 729100, valPlatform: 728930, valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-551',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0010', valPos: 214400, valPlatform: 213900, valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-135F', admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0011', valPos: 374100, valPlatform: 379080, valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-217',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0012', valPos: 79900,  valPlatform: 79400,  valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-498F', admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0013', valPos: 60400,  valPlatform: 59900,  valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-887',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0014', valPos: 327000, valPlatform: 326500, valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-345',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0015', valPos: 123700, valPlatform: 122150, valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-276',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0017', valPos: 64900,  valPlatform: 64650,  valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-029',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0019', valPos: 575700, valPlatform: 577950, valPack: 500 },
-            { date: '28.10.2026', orderId: 'GM-474',  admin: 'Ngọc Minh', picker: 'HẢI ÂU',   group: 'EC', pos: '1082', trd: '0020', valPos: 133800, valPlatform: 133300, valPack: 500 }
+            { date: '28.10.2026', orderId: 'GM-881',  admin: 'Ngọc Minh', picker: 'QUỐC DUY', group: 'EC', pos: '1082', trd: '0007', valPos: 47500,  valPlatform: 47000,  valPack: 500 }
         ];
 
         const demoDataShopee = [
@@ -516,7 +509,6 @@
             return '';
         }
 
-// Hàm phụ trợ đọc file Excel trả về Promise
         function readExcelFileAsync(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -537,10 +529,8 @@
             });
         }
 
-        // Delay ảo để UI Progress Bar kịp render
         const delayUI = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-        // Nâng cấp kiến trúc hàm processData sang Async/Await
         async function processData() {
             const fileGmdInput = document.getElementById('fileGmd');
             const fileGrabInput = document.getElementById('fileGrab');
@@ -563,7 +553,6 @@
             const loadingText = document.getElementById('loadingText');
 
             try {
-                // BƯỚC 1: Đọc file GMD
                 loadingOverlay.classList.add('show');
                 progressBar.style.width = '10%';
                 loadingText.textContent = `Đang phân tích GMD: ${fileGmdInput.files[0].name}... 10%`;
@@ -580,7 +569,6 @@
                     return;
                 }
 
-                // Xử lý GMD
                 progressBar.style.width = '50%';
                 loadingText.textContent = 'Đang đối soát thời gian... 50%';
                 await delayUI(100);
@@ -618,7 +606,6 @@
                     const trdNoRaw = String(r['Trd No'] || '').trim();
                     const trdNo = trdNoRaw.padStart(4, '0');
                     
-                    // Giá trị Pos (GMD) ghi nhận = Sale Amt - D/C
                     const saleAmt = Number(r['Sale Amt'] || 0);
                     const dcAmt = Number(r['D/C'] || 0);
                     const actualPosAmt = saleAmt - dcAmt;
@@ -653,38 +640,26 @@
                 currentGrabData = Array.from(grabMap.values()).sort(sortByPosTrd);
                 currentShopeeData = Array.from(shopeeMap.values()).sort(sortByPosTrd);
 
-                // BƯỚC 2: Kiểm tra và Mapping dữ liệu GrabMart (Đếm ngược từ dưới lên)
                 if (fileGrabInput.files.length > 0) {
                     progressBar.style.width = '75%';
                     loadingText.textContent = `Đang phân tích GrabMart: ${fileGrabInput.files[0].name}... 75%`;
                     await delayUI(200);
 
                     const grabRows = await readExcelFileAsync(fileGrabInput.files[0]);
-                    
-                    // Lọc bỏ dòng trống
                     const validGrabRows = grabRows.filter(r => r['Orrder ID'] || r['Order ID'] || r['Giá trị Grabmart ghi nhận']);
-                    
-                    // Con trỏ lấy dữ liệu từ dòng cuối cùng của file Excel GrabMart
                     let grabCursor = validGrabRows.length - 1;
 
-                    // Duyệt từng dòng GMD, lấy dữ liệu GrabMart điền vào
                     for (let i = 0; i < currentGrabData.length; i++) {
                         if (grabCursor >= 0) {
                             const gRow = validGrabRows[grabCursor];
-                            
-                            // Hỗ trợ "Orrder ID" (lỗi chính tả trong file) hoặc "Order ID"
                             currentGrabData[i].orderId = String(gRow['Orrder ID'] || gRow['Order ID'] || '').trim();
-                            
-                            // Lọc lấy phần số của "Giá trị Grabmart ghi nhận" (Ví dụ: "383.500đ" -> 383500)
                             let rawGrabVal = String(gRow['Giá trị Grabmart ghi nhận'] || '0');
                             currentGrabData[i].valPlatform = Number(rawGrabVal.replace(/[^\d]/g, '')) || 0;
-                            
-                            grabCursor--; // Lùi lên dòng trên của file Excel Grab
+                            grabCursor--; 
                         }
                     }
                 }
 
-                // BƯỚC Cuối: Hoàn tất
                 progressBar.style.width = '100%';
                 loadingText.textContent = 'Hoàn tất xử lý dữ liệu! 100%';
                 await delayUI(400);
@@ -692,7 +667,6 @@
                 loadingOverlay.classList.remove('show');
                 previewReport();
                 
-                // Hiển thị thông báo
                 await delayUI(150);
                 const displayTarget = targetDate.split('-').reverse().join('.');
                 const minDateStr = availableDates[0].split('-').reverse().join('.');
@@ -715,28 +689,84 @@
             }
         }
 
-// HÀM MỚI: Cập nhật mảng dữ liệu khi chỉnh sửa trực tiếp trên bảng
-        function updateCellData(reportType, index, field, element) {
+        // --- CÁC HÀM XỬ LÝ SỰ KIỆN TRÊN Ô NHẬP LIỆU (EXCEL-LIKE) ---
+        
+        // 1. Cập nhật dữ liệu vào biến lưu trữ chung
+        function commitCellData(reportType, index, field, value) {
             const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
-            let rawValue = element.innerText.trim();
             
             if (field === 'orderId') {
-                dataArr[index][field] = rawValue;
+                dataArr[index][field] = value;
             } else if (field === 'valPlatform' || field === 'valPack') {
-                // Lọc lấy đúng phần số (Ví dụ: người dùng nhập "444.990" -> 444990)
-                let num = Number(rawValue.replace(/[^\d]/g, '')) || 0;
+                let num = Number(String(value).replace(/[^\d]/g, '')) || 0;
                 dataArr[index][field] = num;
             }
-            // Render lại bảng để tự động tính tổng và độ lệch
-            previewReport();
+        }
+
+        // 2. Bắt sự kiện Copy/Paste nhiều dòng
+        function handleCellPaste(e, reportType, startIndex, field) {
+            e.preventDefault();
+            const clipboardData = e.clipboardData || window.clipboardData;
+            const pastedText = clipboardData.getData('Text');
+            
+            if (!pastedText) return;
+
+            // Tách dữ liệu thành mảng các dòng (hỗ trợ cả \n và \r\n từ Excel)
+            const rows = pastedText.split(/\r?\n/);
+            const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
+            
+            let currentIndex = startIndex;
+            
+            for (let i = 0; i < rows.length; i++) {
+                let cellValue = rows[i].trim();
+                // Bỏ qua dòng trống cuối cùng nếu copy từ Excel bị dư
+                if (cellValue === '' && i === rows.length - 1) continue; 
+                
+                if (currentIndex < dataArr.length) {
+                    commitCellData(reportType, currentIndex, field, cellValue);
+                    currentIndex++;
+                }
+            }
+            
+            previewReport(); // Render lại bảng
+        }
+
+        // 3. Bắt sự kiện Enter xuống dòng
+        function handleCellKeyDown(e, reportType, currentIndex, field) {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Ngăn trình duyệt tạo thẻ <br>
+                const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
+                
+                // Cập nhật giá trị hiện tại trước khi xuống
+                commitCellData(reportType, currentIndex, field, e.target.innerText);
+                
+                // Focus vào ô bên dưới nếu còn dòng
+                if (currentIndex + 1 < dataArr.length) {
+                    const nextId = `cell-${reportType}-${field}-${currentIndex + 1}`;
+                    const nextCell = document.getElementById(nextId);
+                    if (nextCell) {
+                        nextCell.focus();
+                    }
+                } else {
+                    // Nếu là dòng cuối cùng, render lại bảng
+                    previewReport();
+                }
+            }
+        }
+
+        // 4. Chọn toàn bộ text khi click vào ô (để gõ đè nhanh)
+        function selectAllText(element) {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
         }
 
         function generateReportHTML(title, data, reportType, channelLabel, channelHeaderLabel) {
-            // Lấy thông tin ngày và người lập từ form
             const reportDateInput = document.getElementById('reportDate').value;
             const reportCreator = document.getElementById('reportCreator').value.trim().toUpperCase() || 'HẢI ÂU';
             
-            // Lấy ngày từ dữ liệu nếu có, nếu không lấy từ form
             let displayDate = reportDateInput ? reportDateInput.split('-').reverse().join('.') : '18.10.2026';
             if (data && data.length > 0 && data[0].date) {
                 displayDate = data[0].date;
@@ -752,19 +782,41 @@
                 sumPack += item.valPack;
                 sumDiff += diff;
 
+                // Tạo ID cho các ô để bắt Focus khi nhấn Enter
+                const idOrderId = `cell-${reportType}-orderId-${index}`;
+                const idValPlatform = `cell-${reportType}-valPlatform-${index}`;
+                const idValPack = `cell-${reportType}-valPack-${index}`;
+
                 rowsHTML += `
                     <tr>
                         <td>${index + 1}</td>
                         <td>${item.date}</td>
-                        <td class="cell-editable" contenteditable="true" onblur="updateCellData('${reportType}', ${index}, 'orderId', this)">${item.orderId}</td>
+                        <td id="${idOrderId}" class="cell-editable" contenteditable="true" 
+                            onfocus="selectAllText(this)"
+                            onblur="commitCellData('${reportType}', ${index}, 'orderId', this.innerText); previewReport();"
+                            onkeydown="handleCellKeyDown(event, '${reportType}', ${index}, 'orderId')"
+                            onpaste="handleCellPaste(event, '${reportType}', ${index}, 'orderId')">${item.orderId}</td>
+                        
                         <td>${item.admin}</td>
                         <td>${item.picker}</td>
                         <td>${item.group}</td>
                         <td>${item.pos}</td>
                         <td>${item.trd}</td>
                         <td>${formatVND(item.valPos)}</td>
-                        <td class="cell-editable" contenteditable="true" onblur="updateCellData('${reportType}', ${index}, 'valPlatform', this)" style="color: var(--color-mid); font-weight: 600;">${formatVND(item.valPlatform)}</td>
-                        <td class="cell-editable" contenteditable="true" onblur="updateCellData('${reportType}', ${index}, 'valPack', this)">${formatVND(item.valPack)}</td>
+                        
+                        <td id="${idValPlatform}" class="cell-editable" contenteditable="true" 
+                            onfocus="selectAllText(this)"
+                            onblur="commitCellData('${reportType}', ${index}, 'valPlatform', this.innerText); previewReport();"
+                            onkeydown="handleCellKeyDown(event, '${reportType}', ${index}, 'valPlatform')"
+                            onpaste="handleCellPaste(event, '${reportType}', ${index}, 'valPlatform')"
+                            style="color: var(--color-mid); font-weight: 600;">${formatVND(item.valPlatform)}</td>
+                        
+                        <td id="${idValPack}" class="cell-editable" contenteditable="true" 
+                            onfocus="selectAllText(this)"
+                            onblur="commitCellData('${reportType}', ${index}, 'valPack', this.innerText); previewReport();"
+                            onkeydown="handleCellKeyDown(event, '${reportType}', ${index}, 'valPack')"
+                            onpaste="handleCellPaste(event, '${reportType}', ${index}, 'valPack')">${formatVND(item.valPack)}</td>
+                        
                         <td style="font-weight: 600; color: ${diff !== 0 ? '#E60012' : 'inherit'};">${formatVND(diff)}</td>
                     </tr>
                 `;
@@ -850,7 +902,7 @@
             previewArea.style.display = 'block';
         }
 
-        function printReport(type) {
+       function printReport(type) {
             const printArea = document.getElementById('printArea');
             if (type === 'grab') {
                 printArea.innerHTML = generateReportHTML('BÁO CÁO ĐƠN HÀNG GRABMART HÀNG NGÀY', currentGrabData, 'grab', 'Grabmart', 'GrabMart');
@@ -861,6 +913,57 @@
             setTimeout(() => {
                 window.print();
             }, 150);
+        }
+
+        // HÀM MỚI: Đóng gói dữ liệu và gửi lên Google Apps Script
+        function saveToCloud(reportType) {
+            const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
+            
+            if (!dataArr || dataArr.length === 0 || dataArr === demoDataGrab || dataArr === demoDataShopee) {
+                showCustomAlert('Vui lòng upload và xử lý file GMD thật trước khi lưu (Không lưu dữ liệu Demo).');
+                return;
+            }
+
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            const progressBar = document.getElementById('progressBar');
+
+            loadingOverlay.classList.add('show');
+            progressBar.style.width = '60%';
+            loadingText.textContent = `Đang đồng bộ dữ liệu ${reportType.toUpperCase()} lên máy chủ...`;
+
+            // Đóng gói thông tin người lập và ngày đối soát từ Header
+            const payload = {
+                reportType: reportType,
+                reportDate: document.getElementById('reportDate').value,
+                reportCreator: document.getElementById('reportCreator').value.trim().toUpperCase() || 'HẢI ÂU',
+                data: dataArr
+            };
+
+            // Gọi hàm backend 'saveReportToSheet' bằng thư viện google.script.run
+            if (typeof google !== 'undefined' && google.script && google.script.run) {
+                google.script.run
+                    .withSuccessHandler(function(response) {
+                        progressBar.style.width = '100%';
+                        loadingText.textContent = 'Đồng bộ hoàn tất!';
+                        setTimeout(() => {
+                            loadingOverlay.classList.remove('show');
+                            if (response.success) {
+                                showCustomAlert('✅ ' + response.message);
+                            } else {
+                                showCustomAlert('❌ Lỗi lưu trữ: ' + response.message);
+                            }
+                        }, 500);
+                    })
+                    .withFailureHandler(function(error) {
+                        loadingOverlay.classList.remove('show');
+                        showCustomAlert('❌ Lỗi kết nối máy chủ: ' + error.message);
+                    })
+                    .saveReportToSheet(payload);
+            } else {
+                loadingOverlay.classList.remove('show');
+                showCustomAlert('❌ Môi trường thử nghiệm không hỗ trợ lưu. Vui lòng chạy ứng dụng trực tiếp trên Google Apps Script (Web App).');
+            }
         }
     </script>
 </body>
