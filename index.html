@@ -565,21 +565,44 @@
                                     const posNo = String(r['Pos No'] || '').trim();
                                     const trdNoRaw = String(r['Trd No'] || '').trim();
                                     const trdNo = trdNoRaw.padStart(4, '0');
+                                    
+                                    // Giá trị Pos (GMD) ghi nhận lấy trực tiếp từ cột Sale Amt theo quy chuẩn mới
                                     const saleAmt = Number(r['Sale Amt'] || 0);
-                                    const dcAmt = Number(r['D/C'] || 0);
-                                    const actualPosAmt = saleAmt - dcAmt;
+                                    const actualPosAmt = saleAmt;
 
                                     const key = `${posNo}_${trdNo}`;
                                     const displayDate = targetDate.split('-').reverse().join('.');
 
                                     if (custType === 'GRABMART') {
                                         if (!grabMap.has(key)) {
-                                            grabMap.set(key, { date: displayDate, orderId: '', admin: '', picker: '', group: 'EC', pos: posNo, trd: trdNo, valPos: 0, valPlatform: 0, valPack: 0 });
+                                            grabMap.set(key, { 
+                                                date: displayDate, 
+                                                orderId: '', 
+                                                admin: 'Ngọc Minh', 
+                                                picker: 'Bảo Ngọc', 
+                                                group: 'EC', 
+                                                pos: posNo, 
+                                                trd: trdNo, 
+                                                valPos: 0, 
+                                                valPlatform: 0, 
+                                                valPack: 500 
+                                            });
                                         }
                                         grabMap.get(key).valPos += actualPosAmt;
                                     } else if (custType === 'FOODY' || custType === 'SHOPEEFOOD') {
                                         if (!shopeeMap.has(key)) {
-                                            shopeeMap.set(key, { date: displayDate, orderId: '', admin: '', picker: '', group: 'EC', pos: posNo, trd: trdNo, valPos: 0, valPlatform: 0, valPack: 0 });
+                                            shopeeMap.set(key, { 
+                                                date: displayDate, 
+                                                orderId: '', 
+                                                admin: 'Ngọc Minh', 
+                                                picker: 'Bảo Ngọc', 
+                                                group: 'EC', 
+                                                pos: posNo, 
+                                                trd: trdNo, 
+                                                valPos: 0, 
+                                                valPlatform: 0, 
+                                                valPack: 500 
+                                            });
                                         }
                                         shopeeMap.get(key).valPos += actualPosAmt;
                                     }
