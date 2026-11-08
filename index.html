@@ -97,6 +97,12 @@
             cursor: pointer; 
             font-size: 15px;
         }
+        /* Phân tách màu Hover & Label theo thương hiệu */
+        .upload-box.grab label { color: #00B14F; }
+        .upload-box.grab:hover { border-color: #00B14F; background-color: rgba(0, 177, 79, 0.04); }
+        .upload-box.shopee label { color: #EE4D2D; }
+        .upload-box.shopee:hover { border-color: #EE4D2D; background-color: rgba(238, 77, 45, 0.04); }
+
         .upload-box input[type="file"] { display: none; }
         .file-name { font-size: 12px; color: var(--gray-text); margin-top: 8px; word-break: break-all; }
 
@@ -159,20 +165,37 @@
             transform: translateY(2px);
         }
 
-        .btn-print { 
-            background: linear-gradient(180deg, #4b5563 0%, #374151 100%);
+        .btn-grab { 
+            background: linear-gradient(180deg, #00C85A 0%, #009944 100%);
             color: #FFF; 
             text-shadow: 0 -1px 0 rgba(0,0,0,0.2);
             box-shadow: 
-                0 4px 6px rgba(55, 65, 81, 0.25),
+                0 4px 6px rgba(0, 177, 79, 0.25),
                 0 1px 0 rgba(255, 255, 255, 0.25) inset,
-                0 -2px 0 rgba(0, 0, 0, 0.2) inset;
-            border: 1px solid #1f2937;
+                0 -2px 0 rgba(0, 0, 0, 0.15) inset;
+            border: 1px solid #00883C;
         }
-        .btn-print:active {
+        .btn-grab:active {
             box-shadow: 
-                0 1px 2px rgba(55, 65, 81, 0.3), 
-                0 2px 3px rgba(0, 0, 0, 0.3) inset;
+                0 1px 2px rgba(0, 177, 79, 0.3), 
+                0 2px 3px rgba(0, 0, 0, 0.2) inset;
+            transform: translateY(2px);
+        }
+
+        .btn-shopee { 
+            background: linear-gradient(180deg, #FF6A3D 0%, #E04018 100%);
+            color: #FFF; 
+            text-shadow: 0 -1px 0 rgba(0,0,0,0.2);
+            box-shadow: 
+                0 4px 6px rgba(238, 77, 45, 0.25),
+                0 1px 0 rgba(255, 255, 255, 0.25) inset,
+                0 -2px 0 rgba(0, 0, 0, 0.15) inset;
+            border: 1px solid #CC3510;
+        }
+        .btn-shopee:active {
+            box-shadow: 
+                0 1px 2px rgba(238, 77, 45, 0.3), 
+                0 2px 3px rgba(0, 0, 0, 0.2) inset;
             transform: translateY(2px);
         }
 
@@ -342,17 +365,18 @@
         <div class="upload-section">
             <div class="upload-box">
                 <label for="fileGmd">📁 TẢI FILE GMD (POS)</label>
-                <input type="file" id="fileGmd" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileGmd', 'nameGmd')">
+                <!-- Tham số thứ 3 là mã màu khi chọn file thành công -->
+                <input type="file" id="fileGmd" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileGmd', 'nameGmd', 'var(--color-mid)')">
                 <div class="file-name" id="nameGmd">Chưa chọn file</div>
             </div>
-            <div class="upload-box">
+            <div class="upload-box grab">
                 <label for="fileGrab">📁 TẢI FILE GRABMART</label>
-                <input type="file" id="fileGrab" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileGrab', 'nameGrab')">
+                <input type="file" id="fileGrab" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileGrab', 'nameGrab', '#00B14F')">
                 <div class="file-name" id="nameGrab">Chưa chọn file</div>
             </div>
-            <div class="upload-box">
+            <div class="upload-box shopee">
                 <label for="fileShopee">📁 TẢI FILE SHOPEEFOOD</label>
-                <input type="file" id="fileShopee" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileShopee', 'nameShopee')">
+                <input type="file" id="fileShopee" accept=".xls,.xlsx,.csv" onchange="updateFileName('fileShopee', 'nameShopee', '#EE4D2D')">
                 <div class="file-name" id="nameShopee">Chưa chọn file</div>
             </div>
         </div>
@@ -360,8 +384,8 @@
             <button class="btn-primary" onclick="processData()">⚙️ Xử lý dữ liệu</button>
             <button class="btn-secondary" onclick="previewReport()">👁️ Xem trước báo cáo</button>
             <div style="flex-grow: 1;"></div>
-            <button class="btn-print" onclick="printReport('grab')">🖨️ In GrabMart</button>
-            <button class="btn-print" onclick="printReport('shopee')">🖨️ In ShopeeFood</button>
+            <button class="btn-grab" onclick="printReport('grab')">🖨️ In GrabMart</button>
+            <button class="btn-shopee" onclick="printReport('shopee')">🖨️ In ShopeeFood</button>
         </div>
     </div>
 
@@ -403,12 +427,13 @@
             document.getElementById('customAlertOverlay').classList.remove('show');
         }
 
-        function updateFileName(inputId, nameId) {
+        function updateFileName(inputId, nameId, activeColor) {
             const input = document.getElementById(inputId);
             const nameDisplay = document.getElementById(nameId);
             if (input.files.length > 0) {
                 nameDisplay.textContent = input.files[0].name;
-                nameDisplay.style.color = 'var(--color-mid)';
+                // Áp dụng màu thương hiệu tương ứng được truyền vào
+                nameDisplay.style.color = activeColor || 'var(--color-mid)';
                 nameDisplay.style.fontWeight = '600';
             } else {
                 nameDisplay.textContent = 'Chưa chọn file';
@@ -416,7 +441,6 @@
                 nameDisplay.style.fontWeight = 'normal';
             }
         }
-
         const formatVND = (num) => new Intl.NumberFormat('vi-VN').format(num);
 
         // Dữ liệu 15 dòng khớp chính xác 100% với mẫu kế toán GrabMart
