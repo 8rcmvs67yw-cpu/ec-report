@@ -618,8 +618,10 @@
                     const trdNoRaw = String(r['Trd No'] || '').trim();
                     const trdNo = trdNoRaw.padStart(4, '0');
                     
+                    // Giá trị Pos (GMD) ghi nhận = Sale Amt - D/C
                     const saleAmt = Number(r['Sale Amt'] || 0);
-                    const actualPosAmt = saleAmt;
+                    const dcAmt = Number(r['D/C'] || 0);
+                    const actualPosAmt = saleAmt - dcAmt;
 
                     const key = `${posNo}_${trdNo}`;
                     const displayDate = targetDate.split('-').reverse().join('.');
