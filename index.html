@@ -1712,84 +1712,895 @@ if (fileGrabInput.files.length > 0) {
             printWindow.document.close();
         }
 
-// HÀM MỚI: Đóng gói dữ liệu và gửi lên Google Apps Script (Đã bọc logic ngầm Auto-save)
-        function saveToCloud(reportType, isAutoSave = false) {
-            const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
-            const statusEl = document.getElementById('autoSaveStatus');
-            
-            if (!dataArr || dataArr.length === 0 || dataArr === demoDataGrab || dataArr === demoDataShopee) {
-                if (!isAutoSave) showCustomAlert('Vui lòng upload và xử lý file GMD thật trước khi lưu (Không lưu dữ liệu Demo).');
-                if (statusEl && isAutoSave) statusEl.textContent = '';
-                return;
+/* ============================================================================
+         * HỆ THỐNG AUTO-SAVE & DATA RECOVERY 3 LỚP (INDEXEDDB -> GOOGLE DRIVE -> SHEETS)
+         * ============================================================================ */
+        const EC_STORAGE_CONFIG = {
+            DB_NAME: 'LotteMart_EC_Reconciliation_DB',
+            DB_VERSION: 1,
+            STORE_SESSIONS: 'workspace_sessions',
+            STORE_RAW_FILES: 'raw_excel_files',
+            STORE_VERSIONS: 'version_history',
+            STORE_SYNC_QUEUE: 'offline_sync_queue',
+            LOCAL_DEBOUNCE_MS: 400,
+            CLOUD_DEBOUNCE_MS: 2500,
+            MAX_LOCAL_VERSIONS: 30,
+            QUOTA_WARN_RATIO: 0.85
+        };
+
+        let ecIdbInstance = null;
+        let localDebounceTimer = null;
+        let cloudDebounceTimer = null;
+        let isRecoveringSession = false;
+        let currentSessionVersionId = '';
+        let lastSyncedChecksum = '';
+
+        // 1. HÀM TÍNH CHECKSUM (FNV-1a 32-bit) ĐỂ KIỂM TRA TÍNH TOÀN VẸN & XUNG ĐỘT
+        function computeDataChecksum(obj) {
+            const str = typeof obj === 'string' ? obj : JSON.stringify(obj);
+            let hash = 0x811c9dc5;
+            for (let i = 0; i < str.length; i++) {
+                hash ^= str.charCodeAt(i);
+                hash = (hash * 0x01000193) >>> 0;
+            }
+            return 'CHK-' + hash.toString(16).toUpperCase().padStart(8, '0');
+        }
+
+        // 2. KIỂM TRA TÍNH TOÀN VẸN DỮ LIỆU TRƯỚC KHI LƯU HOẶC PHỤC HỒI (YÊU CẦU 7 & 10)
+        function isRealProcessedData() {
+            const isGrabDemo = (currentGrabData === demoDataGrab);
+            const isShopeeDemo = (currentShopeeData === demoDataShopee);
+            return !(isGrabDemo && isShopeeDemo);
+        }
+
+        function validateSessionIntegrity(session) {
+            if (!session || typeof session !== 'object') {
+                return { valid: false, reason: 'Cấu trúc phiên làm việc rỗng hoặc không hợp lệ.' };
+            }
+            if (!session.reportDate || !/^\d{4}-\d{2}-\d{2}$/.test(session.reportDate)) {
+                return { valid: false, reason: 'Ngày đối soát không hợp lệ.' };
+            }
+            if (!Array.isArray(session.grabData) || !Array.isArray(session.shopeeData)) {
+                return { valid: false, reason: 'Dữ liệu bảng GrabMart/ShopeeFood bị hỏng.' };
+            }
+            if (session.grabData.length === 0 && session.shopeeData.length === 0) {
+                return { valid: false, reason: 'Phiên làm việc không có đơn hàng nào.' };
             }
 
-            const loadingOverlay = document.getElementById('loadingOverlay');
-            const loadingText = document.getElementById('loadingText');
-            const progressBar = document.getElementById('progressBar');
-
-            // Nếu người dùng tự bấm nút -> Hiện Loading Overlay. Nếu Auto-save -> Chỉ hiện text nhỏ góc màn hình.
-            if (!isAutoSave) {
-                loadingOverlay.classList.add('show');
-                progressBar.style.width = '60%';
-                loadingText.textContent = `Đang đồng bộ dữ liệu ${reportType.toUpperCase()} lên máy chủ...`;
-            } else if (statusEl) {
-                statusEl.textContent = `🔄 Đang lưu ${reportType}...`;
-                statusEl.style.color = 'var(--color-mid)';
-            }
-
-            // Đóng gói thông tin người lập và ngày đối soát từ Header
-            const payload = {
-                reportType: reportType,
-                reportDate: document.getElementById('reportDate').value,
-                reportCreator: document.getElementById('reportCreator').value.trim().toUpperCase() || 'HẢI ÂU',
-                data: dataArr
+            const validateRow = (row) => {
+                if (!row || typeof row !== 'object') return false;
+                if (typeof row.valPos !== 'number' || isNaN(row.valPos) || row.valPos < 0) return false;
+                if (typeof row.valPlatform !== 'number' || isNaN(row.valPlatform) || row.valPlatform < 0) return false;
+                if (typeof row.valPack !== 'number' || isNaN(row.valPack) || row.valPack < 0) return false;
+                return true;
             };
 
-            // Gọi hàm backend 'saveReportToSheet' bằng thư viện google.script.run
-            if (typeof google !== 'undefined' && google.script && google.script.run) {
-                google.script.run
-                    .withSuccessHandler(function(response) {
-                        if (!isAutoSave) {
-                            progressBar.style.width = '100%';
-                            loadingText.textContent = 'Đồng bộ hoàn tất!';
-                            setTimeout(() => {
-                                loadingOverlay.classList.remove('show');
-                                if (response.success) {
-                                    showCustomAlert('✅ ' + response.message);
-                                } else {
-                                    showCustomAlert('❌ Lỗi lưu trữ: ' + response.message);
-                                }
-                            }, 500);
-                        } else if (statusEl) {
-                            if (response.success) {
-                                statusEl.textContent = '✅ Đã lưu tự động';
-                                statusEl.style.color = '#00B14F';
-                                setTimeout(() => { statusEl.textContent = ''; }, 3000);
-                            } else {
-                                statusEl.textContent = '❌ Lỗi lưu tự động';
-                                statusEl.style.color = '#EE4D2D';
-                            }
+            for (let i = 0; i < session.grabData.length; i++) {
+                if (!validateRow(session.grabData[i])) {
+                    return { valid: false, reason: `Dữ liệu GrabMart dòng ${i + 1} không toàn vẹn.` };
+                }
+            }
+            for (let i = 0; i < session.shopeeData.length; i++) {
+                if (!validateRow(session.shopeeData[i])) {
+                    return { valid: false, reason: `Dữ liệu ShopeeFood dòng ${i + 1} không toàn vẹn.` };
+                }
+            }
+
+            const expectedChecksum = computeDataChecksum({
+                reportDate: session.reportDate,
+                reportCreator: session.reportCreator,
+                grabData: session.grabData,
+                shopeeData: session.shopeeData
+            });
+
+            if (session.checksum && session.checksum !== expectedChecksum) {
+                return { valid: false, reason: 'Mã kiểm tra toàn vẹn (Checksum) không khớp.' };
+            }
+
+            return { valid: true, checksum: expectedChecksum };
+        }
+
+        // 3. HIỂN THỊ TRẠNG THÁI CHUẨN (YÊU CẦU 9: Đang lưu, Đã lưu, Đang đồng bộ, Đồng bộ thất bại)
+        function renderSystemStatus(stateCode, detailText = '') {
+            const statusEl = document.getElementById('autoSaveStatus');
+            if (!statusEl) return;
+
+            let badgeColor = 'var(--color-mid)';
+            let statusLabel = '';
+
+            switch (stateCode) {
+                case 'SAVING':
+                    statusLabel = '🔄 Đang lưu';
+                    badgeColor = '#0C5776';
+                    break;
+                case 'SAVED':
+                    statusLabel = '✅ Đã lưu';
+                    badgeColor = '#059669';
+                    break;
+                case 'SYNCING':
+                    statusLabel = '☁️ Đang đồng bộ';
+                    badgeColor = '#1D6BF3';
+                    break;
+                case 'SYNC_FAILED':
+                    statusLabel = '⚠️ Đồng bộ thất bại';
+                    badgeColor = '#DC2626';
+                    break;
+                default:
+                    statusLabel = detailText || '';
+                    badgeColor = 'var(--color-mid)';
+            }
+
+            const extraInfo = detailText && stateCode !== 'DEFAULT' ? ` (${detailText})` : '';
+            statusEl.innerHTML = `
+                <span style="display:inline-flex; align-items:center; gap:10px;">
+                    <span style="color:${badgeColor}; font-weight:700;">${statusLabel}${extraInfo}</span>
+                    ${stateCode === 'SYNC_FAILED' ? `<a href="javascript:void(0)" onclick="flushOfflineSyncQueue(true)" style="color:#1D6BF3; text-decoration:underline; font-size:11px;">Thử lại</a>` : ''}
+                    <a href="javascript:void(0)" onclick="openRecoveryCenterModal()" style="color:#334155; background:#F1F5F9; border:1px solid #CBD5E1; border-radius:6px; padding:1px 7px; font-size:11px; text-decoration:none; font-weight:600;">🕒 Khôi phục / Phiên bản</a>
+                </span>
+            `;
+        }
+
+        // 4. KHỞI TẠO LỚP 1 - INDEXEDDB & KIỂM TRA DUNG LƯỢNG LƯU TRỮ
+        function openEcIndexedDB() {
+            return new Promise((resolve, reject) => {
+                if (ecIdbInstance) return resolve(ecIdbInstance);
+                if (!window.indexedDB) return reject(new Error('Trình duyệt không hỗ trợ IndexedDB.'));
+
+                const request = window.indexedDB.open(EC_STORAGE_CONFIG.DB_NAME, EC_STORAGE_CONFIG.DB_VERSION);
+
+                request.onupgradeneeded = function(event) {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(EC_STORAGE_CONFIG.STORE_SESSIONS)) {
+                        const sessionStore = db.createObjectStore(EC_STORAGE_CONFIG.STORE_SESSIONS, { keyPath: 'sessionKey' });
+                        sessionStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains(EC_STORAGE_CONFIG.STORE_RAW_FILES)) {
+                        const fileStore = db.createObjectStore(EC_STORAGE_CONFIG.STORE_RAW_FILES, { keyPath: 'fileKey' });
+                        fileStore.createIndex('reportDate', 'reportDate', { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains(EC_STORAGE_CONFIG.STORE_VERSIONS)) {
+                        const versionStore = db.createObjectStore(EC_STORAGE_CONFIG.STORE_VERSIONS, { keyPath: 'versionId' });
+                        versionStore.createIndex('reportDate', 'reportDate', { unique: false });
+                        versionStore.createIndex('createdAt', 'createdAt', { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE)) {
+                        db.createObjectStore(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, { keyPath: 'queueId' });
+                    }
+                };
+
+                request.onsuccess = function(event) {
+                    ecIdbInstance = event.target.result;
+                    resolve(ecIdbInstance);
+                };
+
+                request.onerror = function(event) {
+                    reject(event.target.error || new Error('Không thể mở IndexedDB.'));
+                };
+            });
+        }
+
+        async function checkBrowserStorageQuota() {
+            if (navigator.storage && navigator.storage.estimate) {
+                try {
+                    const estimate = await navigator.storage.estimate();
+                    if (estimate.quota && estimate.usage) {
+                        const ratio = estimate.usage / estimate.quota;
+                        if (ratio >= EC_STORAGE_CONFIG.QUOTA_WARN_RATIO) {
+                            const usedMB = (estimate.usage / (1024 * 1024)).toFixed(1);
+                            const quotaMB = (estimate.quota / (1024 * 1024)).toFixed(1);
+                            showCustomAlert(`⚠️ Cảnh báo dung lượng trình duyệt sắp đầy (${usedMB}MB / ${quotaMB}MB). Dữ liệu vẫn đang được sao lưu lên Google Drive.`);
                         }
-                    })
-                    .withFailureHandler(function(error) {
-                        if (!isAutoSave) {
-                            loadingOverlay.classList.remove('show');
-                            showCustomAlert('❌ Lỗi kết nối máy chủ: ' + error.message);
-                        } else if (statusEl) {
-                            statusEl.textContent = '❌ Mất kết nối';
-                            statusEl.style.color = '#EE4D2D';
-                        }
-                    })
-                    .saveReportToSheet(payload);
-            } else {
-                if (!isAutoSave) {
-                    loadingOverlay.classList.remove('show');
-                    showCustomAlert('❌ Môi trường thử nghiệm không hỗ trợ lưu. Vui lòng chạy ứng dụng trực tiếp trên Google Apps Script (Web App).');
-                } else if (statusEl) {
-                    statusEl.textContent = '⚠️ Môi trường Test (Không lưu)';
+                    }
+                } catch (e) {
+                    console.warn('Không kiểm tra được quota:', e);
                 }
             }
         }
+
+        function idbPut(storeName, record) {
+            return openEcIndexedDB().then(db => new Promise((resolve, reject) => {
+                const tx = db.transaction([storeName], 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.put(record);
+                req.onsuccess = () => resolve(record);
+                req.onerror = (err) => {
+                    if (req.error && req.error.name === 'QuotaExceededError') {
+                        showCustomAlert('❌ Bộ nhớ trình duyệt (IndexedDB) đã đầy! Vui lòng đồng bộ lên Google Drive trước khi tiếp tục.');
+                    }
+                    reject(req.error || err);
+                };
+            }));
+        }
+
+        function idbGet(storeName, key) {
+            return openEcIndexedDB().then(db => new Promise((resolve, reject) => {
+                const tx = db.transaction([storeName], 'readonly');
+                const store = tx.objectStore(storeName);
+                const req = store.get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => reject(req.error);
+            }));
+        }
+
+        function idbGetAll(storeName) {
+            return openEcIndexedDB().then(db => new Promise((resolve, reject) => {
+                const tx = db.transaction([storeName], 'readonly');
+                const store = tx.objectStore(storeName);
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => reject(req.error);
+            }));
+        }
+
+        function idbDelete(storeName, key) {
+            return openEcIndexedDB().then(db => new Promise((resolve, reject) => {
+                const tx = db.transaction([storeName], 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.delete(key);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            }));
+        }
+
+        // 5. LƯU & KHÔI PHỤC NỘI DUNG FILE EXCEL GỐC (BINARY ARRAYBUFFER & BASE64)
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            return btoa(binary);
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        async function saveRawExcelFileToIdbAndDrive(channelKey, fileObj) {
+            if (!fileObj) return;
+            try {
+                renderSystemStatus('SAVING', `File ${channelKey.toUpperCase()}`);
+                const arrayBuffer = await fileObj.arrayBuffer();
+                const base64Data = arrayBufferToBase64(arrayBuffer);
+                const reportDate = document.getElementById('reportDate').value || 'UNKNOWN_DATE';
+                const fileHash = computeDataChecksum(base64Data.slice(0, 4096) + '_' + fileObj.size + '_' + fileObj.name);
+
+                const fileRecord = {
+                    fileKey: `RAW_${channelKey}`,
+                    channelKey: channelKey,
+                    reportDate: reportDate,
+                    fileName: fileObj.name,
+                    mimeType: fileObj.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    fileSize: fileObj.size,
+                    lastModified: fileObj.lastModified || Date.now(),
+                    checksum: fileHash,
+                    arrayBuffer: arrayBuffer,
+                    base64Data: base64Data,
+                    savedAt: new Date().toISOString()
+                };
+
+                await idbPut(EC_STORAGE_CONFIG.STORE_RAW_FILES, fileRecord);
+                await checkBrowserStorageQuota();
+                renderSystemStatus('SAVED', `File ${fileObj.name}`);
+
+                // Sao lưu file Excel gốc lên Lớp 2 (Google Drive)
+                backupRawFileToGoogleDrive(fileRecord);
+            } catch (err) {
+                console.error('Lỗi lưu file gốc vào IndexedDB:', err);
+                renderSystemStatus('SYNC_FAILED', 'Lỗi đọc file gốc');
+            }
+        }
+
+        function backupRawFileToGoogleDrive(fileRecord) {
+            const drivePayload = {
+                channelKey: fileRecord.channelKey,
+                reportDate: document.getElementById('reportDate').value || fileRecord.reportDate,
+                reportCreator: document.getElementById('reportCreator').value.trim().toUpperCase() || 'HẢI ÂU',
+                fileName: fileRecord.fileName,
+                mimeType: fileRecord.mimeType,
+                fileSize: fileRecord.fileSize,
+                checksum: fileRecord.checksum,
+                base64Data: fileRecord.base64Data
+            };
+
+            if (!navigator.onLine || typeof google === 'undefined' || !google.script || !google.script.run) {
+                idbPut(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, {
+                    queueId: `RAW_FILE_${fileRecord.channelKey}`,
+                    type: 'RAW_FILE',
+                    payload: drivePayload,
+                    queuedAt: new Date().toISOString()
+                });
+                return;
+            }
+
+            renderSystemStatus('SYNCING', `Sao lưu ${fileRecord.fileName}`);
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    if (res && res.success) {
+                        idbDelete(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, `RAW_FILE_${fileRecord.channelKey}`);
+                        renderSystemStatus('SAVED', 'Đã sao lưu file gốc Drive');
+                    } else {
+                        renderSystemStatus('SYNC_FAILED', res ? res.message : 'Lỗi Drive');
+                    }
+                })
+                .withFailureHandler(function() {
+                    idbPut(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, {
+                        queueId: `RAW_FILE_${fileRecord.channelKey}`,
+                        type: 'RAW_FILE',
+                        payload: drivePayload,
+                        queuedAt: new Date().toISOString()
+                    });
+                    renderSystemStatus('SYNC_FAILED', 'Chờ mạng');
+                })
+                .backupRawExcelToDrive(drivePayload);
+        }
+
+        // Phục hồi đối tượng File thật vào <input type="file"> từ ArrayBuffer/Base64 đã lưu
+        async function restoreRawFilesToInputs(customRawFilesMap = null) {
+            const mapping = [
+                { key: 'gmd', inputId: 'fileGmd', nameId: 'nameGmd', color: '#0B3B68' },
+                { key: 'grab', inputId: 'fileGrab', nameId: 'nameGrab', color: '#008037' },
+                { key: 'shopee', inputId: 'fileShopee', nameId: 'nameShopee', color: '#D94625' }
+            ];
+
+            for (const item of mapping) {
+                let record = customRawFilesMap ? customRawFilesMap[item.key] : await idbGet(EC_STORAGE_CONFIG.STORE_RAW_FILES, `RAW_${item.key}`);
+                if (!record) continue;
+
+                try {
+                    const buffer = record.arrayBuffer || (record.base64Data ? base64ToArrayBuffer(record.base64Data) : null);
+                    if (!buffer) continue;
+
+                    const restoredFile = new File([buffer], record.fileName, {
+                        type: record.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        lastModified: record.lastModified || Date.now()
+                    });
+
+                    const dt = new DataTransfer();
+                    dt.items.add(restoredFile);
+                    const inputEl = document.getElementById(item.inputId);
+                    if (inputEl) {
+                        inputEl.files = dt.files;
+                        const nameEl = document.getElementById(item.nameId);
+                        if (nameEl) {
+                            nameEl.textContent = `${record.fileName} (Đã khôi phục)`;
+                            nameEl.style.color = item.color;
+                            nameEl.style.fontWeight = '600';
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Không thể gán lại File vào input:', e);
+                }
+            }
+        }
+
+        // 6. ĐÓNG GÓI PHIÊN LÀM VIỆC & LƯU VÀO INDEXEDDB (LỚP 1) + SNAPSHOT VERSION
+        async function buildCurrentSessionSnapshot(createNewVersion = false) {
+            const reportDate = document.getElementById('reportDate').value;
+            const reportCreator = document.getElementById('reportCreator').value.trim().toUpperCase() || 'HẢI ÂU';
+
+            const gmdRec = await idbGet(EC_STORAGE_CONFIG.STORE_RAW_FILES, 'RAW_gmd');
+            const grabRec = await idbGet(EC_STORAGE_CONFIG.STORE_RAW_FILES, 'RAW_grab');
+            const shopeeRec = await idbGet(EC_STORAGE_CONFIG.STORE_RAW_FILES, 'RAW_shopee');
+
+            const grabCopy = JSON.parse(JSON.stringify(currentGrabData || []));
+            const shopeeCopy = JSON.parse(JSON.stringify(currentShopeeData || []));
+
+            const checksum = computeDataChecksum({
+                reportDate: reportDate,
+                reportCreator: reportCreator,
+                grabData: grabCopy,
+                shopeeData: shopeeCopy
+            });
+
+            const nowISO = new Date().toISOString();
+            if (createNewVersion || !currentSessionVersionId) {
+                const timeTag = nowISO.replace(/[-:T.Z]/g, '').slice(0, 14);
+                currentSessionVersionId = `VER_${reportDate}_${timeTag}`;
+            }
+
+            return {
+                sessionKey: `SESSION_${reportDate}`,
+                LatestPointerKey: 'LATEST_ACTIVE_SESSION',
+                versionId: currentSessionVersionId,
+                reportDate: reportDate,
+                reportCreator: reportCreator,
+                grabData: grabCopy,
+                shopeeData: shopeeCopy,
+                checksum: checksum,
+                updatedAt: nowISO,
+                fileMetadata: {
+                    gmd: gmdRec ? { fileName: gmdRec.fileName, fileSize: gmdRec.fileSize, checksum: gmdRec.checksum } : null,
+                    grab: grabRec ? { fileName: grabRec.fileName, fileSize: grabRec.fileSize, checksum: grabRec.checksum } : null,
+                    shopee: shopeeRec ? { fileName: shopeeRec.fileName, fileSize: shopeeRec.fileSize, checksum: shopeeRec.checksum } : null
+                }
+            };
+        }
+
+        async function saveSessionToIndexedDB(createNewVersion = false) {
+            if (isRecoveringSession || !isRealProcessedData()) return null;
+
+            renderSystemStatus('SAVING');
+            const snapshot = await buildCurrentSessionSnapshot(createNewVersion);
+            const integrity = validateSessionIntegrity(snapshot);
+
+            // Yêu cầu 7: Không ghi đè bản sao lưu tốt bằng dữ liệu lỗi
+            if (!integrity.valid) {
+                console.warn('Bỏ qua lưu do dữ liệu không hợp lệ:', integrity.reason);
+                return null;
+            }
+
+            await idbPut(EC_STORAGE_CONFIG.STORE_SESSIONS, snapshot);
+            await idbPut(EC_STORAGE_CONFIG.STORE_SESSIONS, Object.assign({}, snapshot, { sessionKey: 'LATEST_ACTIVE_SESSION' }));
+
+            // Lưu phiên bản dự phòng vào lịch sử phiên bản (Version History)
+            if (createNewVersion) {
+                await idbPut(EC_STORAGE_CONFIG.STORE_VERSIONS, {
+                    versionId: snapshot.versionId,
+                    reportDate: snapshot.reportDate,
+                    reportCreator: snapshot.reportCreator,
+                    grabCount: snapshot.grabData.length,
+                    shopeeCount: snapshot.shopeeData.length,
+                    checksum: snapshot.checksum,
+                    createdAt: snapshot.updatedAt,
+                    sessionSnapshot: snapshot
+                });
+            }
+
+            await checkBrowserStorageQuota();
+            renderSystemStatus('SAVED');
+            return snapshot;
+        }
+
+        // 7. CƠ CHẾ DEBOUNCE KÉP: LOCAL (400ms) & CLOUD (2500ms)
+        triggerAutoSave = function(reportType, createNewVersion = false) {
+            if (isRecoveringSession || !isRealProcessedData()) return;
+
+            renderSystemStatus('SAVING');
+            clearTimeout(localDebounceTimer);
+            localDebounceTimer = setTimeout(async () => {
+                const snapshot = await saveSessionToIndexedDB(createNewVersion);
+                if (!snapshot) return;
+
+                clearTimeout(cloudDebounceTimer);
+                cloudDebounceTimer = setTimeout(() => {
+                    syncSessionToCloud(snapshot, true);
+                }, EC_STORAGE_CONFIG.CLOUD_DEBOUNCE_MS);
+            }, EC_STORAGE_CONFIG.LOCAL_DEBOUNCE_MS);
+        };
+
+        // 8. ĐỒNG BỘ LÊN LỚP 2 (GOOGLE DRIVE) & LỚP 3 (GOOGLE SHEETS) + HÀNG ĐỢI OFFLINE
+        async function syncSessionToCloud(sessionSnapshot = null, isAutoSave = true) {
+            if (!isRealProcessedData()) {
+                if (!isAutoSave) showCustomAlert('Vui lòng upload và xử lý file GMD thật trước khi lưu (Không lưu dữ liệu Demo).');
+                return;
+            }
+
+            const snapshot = sessionSnapshot || await saveSessionToIndexedDB(false);
+            if (!snapshot) return;
+
+            const integrity = validateSessionIntegrity(snapshot);
+            if (!integrity.valid) {
+                if (!isAutoSave) showCustomAlert('❌ Dữ liệu không hợp lệ, hệ thống từ chối ghi đè bản sao lưu: ' + integrity.reason);
+                return;
+            }
+
+            // Nếu nội dung không đổi so với lần đồng bộ thành công gần nhất và là auto-save thì không gửi lặp
+            if (isAutoSave && snapshot.checksum === lastSyncedChecksum) {
+                renderSystemStatus('SAVED');
+                return;
+            }
+
+            // Nếu mất kết nối Internet -> Đưa vào hàng đợi Offline
+            if (!navigator.onLine) {
+                await idbPut(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, {
+                    queueId: `SESSION_${snapshot.reportDate}`,
+                    type: 'WORKSPACE_SESSION',
+                    payload: snapshot,
+                    queuedAt: new Date().toISOString()
+                });
+                renderSystemStatus('SYNC_FAILED', 'Mất mạng - Đã lưu IndexedDB');
+                return;
+            }
+
+            if (typeof google === 'undefined' || !google.script || !google.script.run) {
+                await idbPut(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, {
+                    queueId: `SESSION_${snapshot.reportDate}`,
+                    type: 'WORKSPACE_SESSION',
+                    payload: snapshot,
+                    queuedAt: new Date().toISOString()
+                });
+                renderSystemStatus('SAVED', 'Đã lưu IndexedDB');
+                return;
+            }
+
+            renderSystemStatus('SYNCING');
+            google.script.run
+                .withSuccessHandler(async function(response) {
+                    if (response && response.success) {
+                        lastSyncedChecksum = snapshot.checksum;
+                        await idbDelete(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, `SESSION_${snapshot.reportDate}`);
+                        renderSystemStatus('SAVED', 'Đã đồng bộ Drive & Sheets');
+                        if (!isAutoSave) {
+                            showCustomAlert('✅ ' + response.message);
+                        }
+                    } else {
+                        await idbPut(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, {
+                            queueId: `SESSION_${snapshot.reportDate}`,
+                            type: 'WORKSPACE_SESSION',
+                            payload: snapshot,
+                            queuedAt: new Date().toISOString()
+                        });
+                        renderSystemStatus('SYNC_FAILED', response ? response.message : 'Lỗi máy chủ');
+                    }
+                })
+                .withFailureHandler(async function(error) {
+                    await idbPut(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE, {
+                        queueId: `SESSION_${snapshot.reportDate}`,
+                        type: 'WORKSPACE_SESSION',
+                        payload: snapshot,
+                        queuedAt: new Date().toISOString()
+                    });
+                    renderSystemStatus('SYNC_FAILED', 'Mất kết nối');
+                    if (!isAutoSave) {
+                        showCustomAlert('❌ Đồng bộ thất bại (Dữ liệu đã được bảo vệ an toàn trong IndexedDB): ' + error.message);
+                    }
+                })
+                .syncFullWorkspaceSession(snapshot);
+        }
+
+        // Giữ tương thích ngược với hàm saveToCloud hiện hành
+        function saveToCloud(reportType, isAutoSave = false) {
+            syncSessionToCloud(null, isAutoSave);
+        }
+
+        // Đồng bộ lại hàng đợi khi có mạng Internet trở lại (Yêu cầu 4)
+        async function flushOfflineSyncQueue(manualRetry = false) {
+            if (!navigator.onLine) {
+                if (manualRetry) showCustomAlert('⚠️ Thiết bị vẫn đang ngoại tuyến (Offline). Hệ thống sẽ tự động đồng bộ ngay khi có mạng.');
+                return;
+            }
+            if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+
+            const queueItems = await idbGetAll(EC_STORAGE_CONFIG.STORE_SYNC_QUEUE);
+            if (!queueItems || queueItems.length === 0) {
+                if (manualRetry) syncSessionToCloud(null, false);
+                return;
+            }
+
+            renderSystemStatus('SYNCING', `Đồng bộ bù ${queueItems.length} tác vụ`);
+            for (const item of queueItems) {
+                if (item.type === 'RAW_FILE') {
+                    backupRawFileToGoogleDrive(item.payload);
+                } else if (item.type === 'WORKSPACE_SESSION') {
+                    await syncSessionToCloud(item.payload, true);
+                }
+            }
+        }
+
+        // 9. PHỤC HỒI PHIÊN LÀM VIỆC & XỬ LÝ XUNG ĐỘT LOCAL VS CLOUD (YÊU CẦU 5, 6, 8, 10)
+        async function applyRecoveredSession(sessionObj, sourceLabel = 'IndexedDB') {
+            const check = validateSessionIntegrity(sessionObj);
+            if (!check.valid) {
+                showCustomAlert('❌ Không thể phục hồi phiên bản này do dữ liệu không toàn vẹn: ' + check.reason);
+                return false;
+            }
+
+            isRecoveringSession = true;
+            try {
+                document.getElementById('reportDate').value = sessionObj.reportDate;
+                document.getElementById('reportCreator').value = sessionObj.reportCreator || 'HẢI ÂU';
+                currentGrabData = JSON.parse(JSON.stringify(sessionObj.grabData));
+                currentShopeeData = JSON.parse(JSON.stringify(sessionObj.shopeeData));
+                currentSessionVersionId = sessionObj.versionId || '';
+                lastSyncedChecksum = sessionObj.checksum || '';
+
+                await restoreRawFilesToInputs();
+                previewReport();
+
+                // Lưu đồng bộ lại vào IndexedDB làm phiên hiện hành
+                await idbPut(EC_STORAGE_CONFIG.STORE_SESSIONS, Object.assign({}, sessionObj, { sessionKey: `SESSION_${sessionObj.reportDate}` }));
+                await idbPut(EC_STORAGE_CONFIG.STORE_SESSIONS, Object.assign({}, sessionObj, { sessionKey: 'LATEST_ACTIVE_SESSION' }));
+
+                renderSystemStatus('SAVED', `Đã khôi phục từ ${sourceLabel}`);
+                closeCustomAlert();
+                return true;
+            } finally {
+                isRecoveringSession = false;
+            }
+        }
+
+        // Khôi phục từ Cloud (bao gồm tải lại cả file Excel gốc từ Google Drive nếu máy mới chưa có)
+        function restoreSessionFromCloudVersion(versionFileId, sourceTitle = 'Google Drive') {
+            if (typeof google === 'undefined' || !google.script || !google.script.run) {
+                showCustomAlert('⚠️ Chức năng tải phiên bản từ Google Drive cần chạy trên Google Apps Script Web App.');
+                return;
+            }
+
+            renderSystemStatus('SYNCING', 'Đang tải bản sao lưu từ Drive...');
+            google.script.run
+                .withSuccessHandler(async function(res) {
+                    if (!res || !res.success || !res.session) {
+                        renderSystemStatus('SYNC_FAILED', 'Không tải được bản sao lưu');
+                        showCustomAlert('❌ Không thể tải phiên bản từ Google Drive: ' + (res ? res.message : 'Lỗi không xác định'));
+                        return;
+                    }
+
+                    // Nếu trên Drive có đính kèm nội dung file Excel gốc thì lưu lại vào IndexedDB của máy hiện tại
+                    if (res.rawFiles && typeof res.rawFiles === 'object') {
+                        for (const chKey of ['gmd', 'grab', 'shopee']) {
+                            const rf = res.rawFiles[chKey];
+                            if (rf && rf.base64Data) {
+                                const buf = base64ToArrayBuffer(rf.base64Data);
+                                await idbPut(EC_STORAGE_CONFIG.STORE_RAW_FILES, {
+                                    fileKey: `RAW_${chKey}`,
+                                    channelKey: chKey,
+                                    reportDate: res.session.reportDate,
+                                    fileName: rf.fileName,
+                                    mimeType: rf.mimeType,
+                                    fileSize: rf.fileSize,
+                                    checksum: rf.checksum,
+                                    arrayBuffer: buf,
+                                    base64Data: rf.base64Data,
+                                    savedAt: new Date().toISOString()
+                                });
+                            }
+                        }
+                    }
+
+                    await applyRecoveredSession(res.session, sourceTitle);
+                })
+                .withFailureHandler(function(err) {
+                    renderSystemStatus('SYNC_FAILED', 'Lỗi tải Drive');
+                    showCustomAlert('❌ Lỗi kết nối Google Drive: ' + err.message);
+                })
+                .loadSessionSnapshotFromDrive(versionFileId);
+        }
+
+        // 10. TRUNG TÂM KHÔI PHỤC & QUẢN LÝ PHIÊN BẢN DỰ PHÒNG (MODAL TRỰC QUAN)
+        window.cachedRecoverySessions = {};
+
+        async function openRecoveryCenterModal(startupConflictData = null) {
+            const localLatest = await idbGet(EC_STORAGE_CONFIG.STORE_SESSIONS, 'LATEST_ACTIVE_SESSION');
+            const localVersions = await idbGetAll(EC_STORAGE_CONFIG.STORE_VERSIONS);
+            localVersions.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+            window.cachedRecoverySessions = {};
+            if (localLatest) {
+                window.cachedRecoverySessions['LOCAL_LATEST'] = localLatest;
+            }
+            localVersions.forEach((v, idx) => {
+                window.cachedRecoverySessions[`LOCAL_VER_${idx}`] = v.sessionSnapshot;
+            });
+
+            const formatTimeVN = (isoStr) => {
+                if (!isoStr) return '';
+                const d = new Date(isoStr);
+                if (isNaN(d)) return isoStr;
+                return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + d.toLocaleDateString('vi-VN');
+            };
+
+            let conflictBannerHTML = '';
+            if (startupConflictData && startupConflictData.cloudSession && localLatest) {
+                const cloudS = startupConflictData.cloudSession;
+                window.cachedRecoverySessions['CLOUD_LATEST'] = cloudS;
+                conflictBannerHTML = `
+                    <div style="background:#FFFBEB; border:1px solid #F59E0B; border-radius:10px; padding:10px; text-align:left; margin-bottom:10px;">
+                        <div style="font-size:12.5px; font-weight:700; color:#B45309; margin-bottom:4px;">⚠️ Phát hiện xung đột dữ liệu (Local vs Cloud)</div>
+                        <div style="font-size:11.5px; color:#334155; margin-bottom:6px;">
+                            • <b>Bản trên trình duyệt:</b> ${formatTimeVN(localLatest.updatedAt)} (${localLatest.grabData.length} Grab / ${localLatest.shopeeData.length} Shopee)<br>
+                            • <b>Bản trên Google Drive:</b> ${formatTimeVN(cloudS.updatedAt)} (${cloudS.grabData.length} Grab / ${cloudS.shopeeData.length} Shopee)
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button onclick="applyRecoveredSession(window.cachedRecoverySessions['LOCAL_LATEST'], 'IndexedDB')" style="flex:1; height:30px; font-size:11.5px; background:#0E4D5D; color:#FFF; border-radius:7px;">Giữ bản Máy này</button>
+                            <button onclick="restoreSessionFromCloudVersion('${startupConflictData.cloudFileId || ''}', 'Google Drive')" style="flex:1; height:30px; font-size:11.5px; background:#1D6BF3; color:#FFF; border-radius:7px;">Lấy bản Google Drive</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            let latestCardHTML = '';
+            if (localLatest && validateSessionIntegrity(localLatest).valid) {
+                const dispDate = localLatest.reportDate.split('-').reverse().join('.');
+                latestCardHTML = `
+                    <div class="alert-status-banner" style="justify-content:space-between; margin-bottom:10px;">
+                        <div style="display:flex; align-items:center; gap:9px;">
+                            <div class="status-check-icon">✓</div>
+                            <div class="status-text-group">
+                                <span class="status-label">Phiên gần nhất (${formatTimeVN(localLatest.updatedAt)})</span>
+                                <span class="status-date">Ngày ${dispDate} • ${localLatest.grabData.length} Grab / ${localLatest.shopeeData.length} Shopee</span>
+                            </div>
+                        </div>
+                        <button onclick="applyRecoveredSession(window.cachedRecoverySessions['LOCAL_LATEST'], 'IndexedDB')" style="height:30px; padding:0 10px; font-size:11.5px; background:#1D72F2; color:#FFF; border-radius:7px;">Khôi phục</button>
+                    </div>
+                `;
+            } else {
+                latestCardHTML = `<div style="font-size:12px; color:#64748B; margin-bottom:10px;">Chưa có phiên làm việc nào lưu trên trình duyệt này.</div>`;
+            }
+
+            let versionRowsHTML = '';
+            localVersions.slice(0, 6).forEach((ver, idx) => {
+                const dispDate = ver.reportDate.split('-').reverse().join('.');
+                versionRowsHTML += `
+                    <div class="channel-row" style="justify-content:space-between; padding:6px 0;">
+                        <div class="channel-info">
+                            <div class="channel-main" style="font-size:12px;">📅 ${dispDate} — ${formatTimeVN(ver.createdAt)}</div>
+                            <div class="channel-sub" style="font-size:11px;">Grab: ${ver.grabCount} đơn | Shopee: ${ver.shopeeCount} đơn | ${ver.reportCreator}</div>
+                        </div>
+                        <button onclick="applyRecoveredSession(window.cachedRecoverySessions['LOCAL_VER_${idx}'], 'Bản dự phòng Local')" style="height:26px; padding:0 8px; font-size:11px; background:#E2E8F0; color:#0F172A; border-radius:6px;">Chọn</button>
+                    </div>
+                `;
+            });
+
+            const modalHTML = `
+                <div class="alert-top-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                        <path d="M12 7v5l4 2"/>
+                    </svg>
+                </div>
+                <div class="alert-title">KHÔI PHỤC DỮ LIỆU & PHIÊN BẢN</div>
+                <div class="alert-subtitle">Bảo vệ 3 lớp: IndexedDB • Google Drive • Google Sheets</div>
+                ${conflictBannerHTML}
+                ${latestCardHTML}
+                <div style="text-align:left; font-size:11.5px; font-weight:700; color:#334155; margin:6px 0 4px;">Lịch sử phiên bản dự phòng (Local & Drive):</div>
+                <div class="alert-channel-card" id="recoveryVersionList" style="max-height:165px; overflow-y:auto;">
+                    ${versionRowsHTML || '<div style="padding:8px 0; font-size:12px; color:#64748B;">Chưa có lịch sử phiên bản.</div>'}
+                </div>
+            `;
+
+            showCustomAlert(modalHTML, true);
+
+            // Tải thêm danh sách phiên bản dự phòng từ Google Drive (Lớp 2) để phục hồi khi đổi máy tính
+            if (navigator.onLine && typeof google !== 'undefined' && google.script && google.script.run) {
+                const targetDate = document.getElementById('reportDate').value;
+                google.script.run
+                    .withSuccessHandler(function(cloudRes) {
+                        const listContainer = document.getElementById('recoveryVersionList');
+                        if (!listContainer || !cloudRes || !Array.isArray(cloudRes.versions) || cloudRes.versions.length === 0) return;
+
+                        let cloudHTML = `<div style="font-size:11px; font-weight:700; color:#1D6BF3; padding:6px 0 2px; border-top:1px dashed #CBD5E1; text-align:left;">☁️ Phiên bản lưu trên Google Drive:</div>`;
+                        cloudRes.versions.forEach(cv => {
+                            cloudHTML += `
+                                <div class="channel-row" style="justify-content:space-between; padding:6px 0;">
+                                    <div class="channel-info">
+                                        <div class="channel-main" style="font-size:12px;">☁️ ${cv.fileName}</div>
+                                        <div class="channel-sub" style="font-size:11px;">${formatTimeVN(cv.createdAt)}</div>
+                                    </div>
+                                    <button onclick="restoreSessionFromCloudVersion('${cv.fileId}', 'Google Drive')" style="height:26px; padding:0 8px; font-size:11px; background:#DBEAFE; color:#1D4ED8; border-radius:6px;">Tải về</button>
+                                </div>
+                            `;
+                        });
+                        listContainer.insertAdjacentHTML('beforeend', cloudHTML);
+                    })
+                    .listCloudBackupVersions(targetDate);
+            }
+        }
+
+        // 11. GẮN KẾT SỰ KIỆN TỰ ĐỘNG (FILE INPUT, CHỈNH SỬA Ô, F5 / ĐÓNG TRÌNH DUYỆT, MẤT MẠNG)
+        const _originalUpdateFileName = updateFileName;
+        updateFileName = function(inputId, nameId, activeColor) {
+            _originalUpdateFileName(inputId, nameId, activeColor);
+            const inputEl = document.getElementById(inputId);
+            if (inputEl && inputEl.files && inputEl.files.length > 0) {
+                const channelMap = { fileGmd: 'gmd', fileGrab: 'grab', fileShopee: 'shopee' };
+                const chKey = channelMap[inputId];
+                if (chKey) {
+                    saveRawExcelFileToIdbAndDrive(chKey, inputEl.files[0]);
+                }
+            }
+        };
+
+        const _originalProcessData = processData;
+        processData = async function() {
+            const fileGmdInput = document.getElementById('fileGmd');
+            // Nếu sau khi F5 input file bị trình duyệt xóa trắng, tự động khôi phục File gốc từ IndexedDB trước khi chạy processData
+            if (!fileGmdInput.files || fileGmdInput.files.length === 0) {
+                await restoreRawFilesToInputs();
+            }
+            await _originalProcessData();
+            if (isRealProcessedData()) {
+                const snap = await saveSessionToIndexedDB(true);
+                if (snap) syncSessionToCloud(snap, true);
+            }
+        };
+
+        // Cập nhật trực tiếp DOM khi sửa ô để không làm mất dữ liệu đang gõ và kích hoạt Auto-save
+        commitCellData = function(reportType, index, field, value) {
+            const dataArr = reportType === 'grab' ? currentGrabData : currentShopeeData;
+            if (!dataArr || !dataArr[index]) return;
+
+            if (field === 'orderId') {
+                dataArr[index][field] = String(value || '').trim();
+            } else if (field === 'valPlatform' || field === 'valPack') {
+                let num = Number(String(value || '').replace(/[^\d]/g, '')) || 0;
+                dataArr[index][field] = num;
+            }
+
+            triggerAutoSave(reportType, false);
+        };
+
+        // Khi mở ứng dụng: Kiểm tra IndexedDB & Cloud để đề xuất khôi phục phiên gần nhất hoặc cảnh báo xung đột
+        window.addEventListener('DOMContentLoaded', async function() {
+            try {
+                await openEcIndexedDB();
+                await checkBrowserStorageQuota();
+
+                const creatorInput = document.getElementById('reportCreator');
+                const dateInput = document.getElementById('reportDate');
+                if (creatorInput) creatorInput.addEventListener('input', () => triggerAutoSave('grab', false));
+                if (dateInput) dateInput.addEventListener('change', () => triggerAutoSave('grab', false));
+
+                const localLatest = await idbGet(EC_STORAGE_CONFIG.STORE_SESSIONS, 'LATEST_ACTIVE_SESSION');
+                const hasValidLocal = localLatest && validateSessionIntegrity(localLatest).valid;
+
+                if (navigator.onLine && typeof google !== 'undefined' && google.script && google.script.run) {
+                    const queryDate = hasValidLocal ? localLatest.reportDate : (dateInput ? dateInput.value : '');
+                    google.script.run
+                        .withSuccessHandler(function(cloudRes) {
+                            const hasValidCloud = cloudRes && cloudRes.success && cloudRes.session && validateSessionIntegrity(cloudRes.session).valid;
+                            if (hasValidLocal && hasValidCloud) {
+                                if (localLatest.checksum !== cloudRes.session.checksum) {
+                                    // Có xung đột giữa Local và Cloud
+                                    openRecoveryCenterModal({
+                                        cloudSession: cloudRes.session,
+                                        cloudFileId: cloudRes.fileId
+                                    });
+                                } else {
+                                    openRecoveryCenterModal();
+                                }
+                            } else if (hasValidLocal) {
+                                openRecoveryCenterModal();
+                            } else if (hasValidCloud) {
+                                openRecoveryCenterModal({
+                                    cloudSession: cloudRes.session,
+                                    cloudFileId: cloudRes.fileId
+                                });
+                            } else {
+                                renderSystemStatus('DEFAULT', '');
+                            }
+                        })
+                        .withFailureHandler(function() {
+                            if (hasValidLocal) openRecoveryCenterModal();
+                        })
+                        .getLatestCloudSession(queryDate);
+                } else if (hasValidLocal) {
+                    openRecoveryCenterModal();
+                } else {
+                    renderSystemStatus('DEFAULT', '');
+                }
+
+                // Kiểm tra hàng đợi đồng bộ còn tồn đọng
+                if (navigator.onLine) {
+                    flushOfflineSyncQueue(false);
+                }
+            } catch (e) {
+                console.error('Lỗi khởi tạo hệ thống Auto-Save:', e);
+            }
+        });
+
+        window.addEventListener('online', function() {
+            renderSystemStatus('SYNCING', 'Đã có mạng - Đang đồng bộ lại');
+            flushOfflineSyncQueue(false);
+        });
+
+        window.addEventListener('offline', function() {
+            renderSystemStatus('SYNC_FAILED', 'Mất mạng - Đang lưu IndexedDB');
+        });
+
+        window.addEventListener('beforeunload', function() {
+            if (isRealProcessedData()) {
+                saveSessionToIndexedDB(false);
+            }
+        });
     </script>
 </body>
 </html>
