@@ -494,9 +494,9 @@
 
         /* --- PRINT MEDIA QUERIES --- */
         @media print {
-            @page { size: A4 landscape; margin: 0mm; }
+            @page { size: A4 landscape; margin: 10mm 10mm; }
             body { 
-                padding: 10mm 15mm; 
+                padding: 0; 
                 margin: 0; 
                 box-sizing: border-box; 
                 background: none; 
@@ -507,10 +507,25 @@
             .app-container, .preview-area { display: none !important; }
             .no-print { display: none !important; }
             .print-only { display: block !important; }
-            .paper-page { margin: 0; padding: 0; box-shadow: none; max-width: none; width: 100%; page-break-after: always; }
+            .paper-page { 
+                margin: 0; 
+                padding: 4mm 0; 
+                box-shadow: none; 
+                max-width: none; 
+                width: 100%; 
+                page-break-after: always; 
+                -webkit-box-decoration-break: clone;
+                box-decoration-break: clone;
+            }
             .paper-page:last-child { page-break-after: auto; }
             table.accounting-table { page-break-inside: auto; color: #000000 !important; } /* Đặt lại màu đen cho bảng báo cáo */
-            table.accounting-table tr { page-break-inside: avoid; page-break-after: auto; }
+            table.accounting-table tr,
+            table.accounting-table td,
+            table.accounting-table th { 
+                page-break-inside: avoid !important; 
+                break-inside: avoid !important; 
+                page-break-after: auto; 
+            }
             table.accounting-table thead { display: table-row-group; }
         }
 
@@ -1633,7 +1648,7 @@ if (fileGrabInput.files.length > 0) {
                 showCustomAlert('Vui lòng cho phép trình duyệt mở cửa sổ bật lên (Pop-up) cho trang này để in báo cáo.');
                 return;
             }
-printWindow.document.open();
+            printWindow.document.open();
             printWindow.document.write(`
                 <!DOCTYPE html>
                 <html lang="vi">
@@ -1644,7 +1659,7 @@ printWindow.document.open();
                         ${currentStyles}
                         @page {
                             size: A4 landscape;
-                            margin: 0mm !important;
+                            margin: 10mm 10mm;
                         }
                         html {
                             margin: 0 !important;
@@ -1655,7 +1670,7 @@ printWindow.document.open();
                         }
                         body {
                             margin: 0 !important;
-                            padding: 8mm 10mm !important;
+                            padding: 0 !important;
                             min-height: 0 !important;
                             height: auto !important;
                             background: #FFFFFF !important;
@@ -1664,11 +1679,19 @@ printWindow.document.open();
                         }
                         .paper-page {
                             margin: 0 !important;
-                            padding: 0 !important;
+                            padding: 4mm 0 !important;
                             box-shadow: none !important;
                             max-width: none !important;
                             width: 100% !important;
                             page-break-after: auto !important;
+                            -webkit-box-decoration-break: clone !important;
+                            box-decoration-break: clone !important;
+                        }
+                        table.accounting-table tr,
+                        table.accounting-table td,
+                        table.accounting-table th {
+                            page-break-inside: avoid !important;
+                            break-inside: avoid !important;
                         }
                     </style>
                 </head>
